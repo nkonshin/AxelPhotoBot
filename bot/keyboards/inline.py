@@ -1,0 +1,232 @@
+"""Inline keyboards for the bot."""
+
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from bot.templates.prompts import get_all_templates
+
+
+# Callback data prefixes
+class CallbackData:
+    """Callback data constants."""
+    
+    # Main menu actions
+    GENERATE = "menu:generate"
+    EDIT = "menu:edit"
+    MODEL = "menu:model"
+    PROFILE = "menu:profile"
+    TOKENS = "menu:tokens"
+    TRENDS = "menu:trends"
+    GUIDE = "menu:guide"
+    
+    # Confirmation actions
+    CONFIRM = "confirm:yes"
+    CANCEL = "confirm:no"
+    
+    # Navigation
+    BACK_TO_MENU = "nav:menu"
+    
+    # Template prefix
+    TEMPLATE_PREFIX = "template:"
+
+
+def main_menu_keyboard() -> InlineKeyboardMarkup:
+    """
+    Create the main menu keyboard with 6 buttons.
+    
+    Layout:
+    [Создать картинку] [Редактировать фото]
+    [Выбрать модель]   [Личный кабинет]
+    [Купить токены]    [Идеи и тренды]
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="🎨 Создать картинку",
+            callback_data=CallbackData.GENERATE,
+        ),
+        InlineKeyboardButton(
+            text="✏️ Редактировать фото",
+            callback_data=CallbackData.EDIT,
+        ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="🤖 Выбрать модель",
+            callback_data=CallbackData.MODEL,
+        ),
+        InlineKeyboardButton(
+            text="👤 Личный кабинет",
+            callback_data=CallbackData.PROFILE,
+        ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="💰 Купить токены",
+            callback_data=CallbackData.TOKENS,
+        ),
+        InlineKeyboardButton(
+            text="💡 Идеи и тренды",
+            callback_data=CallbackData.TRENDS,
+        ),
+    )
+    
+    return builder.as_markup()
+
+
+def templates_keyboard() -> InlineKeyboardMarkup:
+    """
+    Create keyboard with template options.
+    
+    Shows all available templates as buttons.
+    """
+    builder = InlineKeyboardBuilder()
+    
+    templates = get_all_templates()
+    for template in templates:
+        builder.row(
+            InlineKeyboardButton(
+                text=f"{template.name} ({template.tokens_cost} 🪙)",
+                callback_data=f"{CallbackData.TEMPLATE_PREFIX}{template.id}",
+            )
+        )
+    
+    # Add back button
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад в меню",
+            callback_data=CallbackData.BACK_TO_MENU,
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def confirm_keyboard() -> InlineKeyboardMarkup:
+    """
+    Create confirmation keyboard.
+    
+    Layout:
+    [✅ Подтвердить] [❌ Отмена]
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="✅ Подтвердить",
+            callback_data=CallbackData.CONFIRM,
+        ),
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data=CallbackData.CANCEL,
+        ),
+    )
+    
+    return builder.as_markup()
+
+
+def back_keyboard() -> InlineKeyboardMarkup:
+    """
+    Create back to menu keyboard.
+    
+    Layout:
+    [◀️ Назад в меню]
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад в меню",
+            callback_data=CallbackData.BACK_TO_MENU,
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def model_keyboard() -> InlineKeyboardMarkup:
+    """
+    Create model selection keyboard.
+    
+    Layout:
+    [GPT-Image-1 (текущая) ✓]
+    [🔜 Скоро будут новые модели]
+    [◀️ Назад в меню]
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="✅ GPT-Image-1 (текущая)",
+            callback_data="model:gpt-image-1",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="🔜 Скоро будут новые модели",
+            callback_data="model:coming_soon",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад в меню",
+            callback_data=CallbackData.BACK_TO_MENU,
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def tokens_keyboard() -> InlineKeyboardMarkup:
+    """
+    Create tokens purchase keyboard (placeholder).
+    
+    Layout:
+    [🔜 Оплата скоро будет доступна]
+    [◀️ Назад в меню]
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="🔜 Оплата скоро будет доступна",
+            callback_data="tokens:coming_soon",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад в меню",
+            callback_data=CallbackData.BACK_TO_MENU,
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def history_item_keyboard(task_id: int, has_image: bool) -> InlineKeyboardMarkup:
+    """
+    Create keyboard for history item.
+    
+    Args:
+        task_id: The task ID
+        has_image: Whether the task has a result image
+    """
+    builder = InlineKeyboardBuilder()
+    
+    if has_image:
+        builder.row(
+            InlineKeyboardButton(
+                text="🖼 Показать изображение",
+                callback_data=f"history:show:{task_id}",
+            )
+        )
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад",
+            callback_data="history:back",
+        )
+    )
+    
+    return builder.as_markup()

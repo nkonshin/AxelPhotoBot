@@ -1,0 +1,158 @@
+"""Handler for user profile (Личный кабинет)."""
+
+import logging
+from datetime import datetime
+
+from aiogram import Router, F
+from aiogram.types import CallbackQuery
+
+from bot.db.database import get_session_maker
+from bot.db.repositories import UserRepository, TaskRepository
+from bot.keyboards.inline import (
+    CallbackData,
+    back_keyboard,
+    main_menu_keyboard,
+    history_item_keyboard,
+)
+
+logger = logging.getLogger(__name__)
+
+router = Router(name="profile")
+
+
+def format_task_status(status: str) -> str:
+    """Format task status for display."""
+    status_map = {
+        "pending": "⏳ В очереди",
+        "processing": "🔄 Обработка",
+        "done": "✅ Готово",
+        "failed": "❌ Ошибка",
+    }
+    return status_map.get(status, status)
+
+
+def format_task_type(task_type: str) -> str:
+    """Format task type for display."""
+    type_map = {
+        "generate": "🎨 Генерация",
+        "edit": "✏️ Редактирование",
+    }
+    return type_map.get(task_type, task_type)
+
+
+def format_date(dt: datetime) -> str:
+    """Format datetime for display."""
+    if dt is None:
+        return "—"
+    return dt.strftime("%d.%m.%Y %H:%M")
+
+
+@router.callback_query(F.data == CallbackData.PROFILE)
+async def show_profile(callback: CallbackQuery) -> None:
+    """Show user profile with balance and statistics."""
+    user_tg = callback.from_user
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        user_repo = UserRepository(session)
+        task_repo = TaskRepository(session)
+        
+        user = await user_repo.get_by_telegram_id(user_tg.id)
+        
+        if user is None:
+            await callback.message.edit_text(
+                "❌ Пользователь не найден. Используйте /start",
+                reply_markup=main_menu_keyboard(),
+            )
+            await callback.answer()
+            return
+        
+        # Get user's generation history
+        history = await task_repo.get_user_history(user.id, limit=10)
+        
+        # Count completed generations
+        total_generations = len(history)
+        successful_generations = sum(1 for t in history if t.status == "done")
+    
+    # Build profile message
+    text = (
+        f"👤 <b>Личный кабинет</b>\n\n"
+        f"<b>Баланс:</b> {user.tokens} 🪙\n"
+        f"<b>Всего генераций:</b> {total_generations}\n"
+        f"<b>Успешных:</b> {successful_generations}\n"
+        f"<b>Модель:</b> {user.selected_model}\n\n"
+    )
+    
+    if history:
+        text += "<b>📋 Последние генерации:</b>\n\n"
+        for i, task in enumerate(history[:10], 1):
+            status_icon = format_task_status(task.status)
+            task_type = format_task_type(task.task_type)
+            date = format_date(task.created_at)
+            
+            # Truncate prompt for display
+            prompt_preview = task.prompt[:30] + "..." if len(task.prompt) > 30 else task.prompt
+            
+            text += (
+                f"{i}. {task_type}\n"
+                f"   {status_icon} | {date}\n"
+                f"   <i>{prompt_preview}</i>\n\n"
+            )
+    else:
+        text += (
+            "<i>У вас пока нет генераций.</i>\n\n"
+            "Создайте первое изображение в разделе «Создать картинку»!"
+        )
+    
+    await callback.message.edit_text(
+        text=text,
+        reply_markup=back_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("history:show:"))
+async def show_history_image(callback: CallbackQuery) -> None:
+    """Show image from history item."""
+    # Extract task_id from callback data
+    try:
+        task_id = int(callback.data.split(":")[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Ошибка: неверный ID задачи")
+        return
+    
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        task_repo = TaskRepository(session)
+        task = await task_repo.get_by_id(task_id)
+        
+        if task is None:
+            await callback.answer("❌ Задача не найдена")
+            return
+        
+        if task.status != "done" or not task.result_image_url:
+            await callback.answer("❌ Изображение недоступно")
+            return
+    
+    # Send the image
+    try:
+        await callback.message.answer_photo(
+            photo=task.result_image_url,
+            caption=(
+                f"🖼 <b>Результат генерации</b>\n\n"
+                f"<b>Промпт:</b> <i>{task.prompt[:200]}{'...' if len(task.prompt) > 200 else ''}</i>\n"
+                f"<b>Дата:</b> {format_date(task.created_at)}"
+            ),
+        )
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Failed to send history image: {e}")
+        await callback.answer("❌ Не удалось загрузить изображение")
+
+
+@router.callback_query(F.data == "history:back")
+async def back_to_profile(callback: CallbackQuery) -> None:
+    """Go back to profile from history item."""
+    # Re-show profile
+    await show_profile(callback)

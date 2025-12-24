@@ -8,6 +8,9 @@ import asyncio
 import logging
 from typing import Optional
 
+from redis import Redis
+from rq import Queue, Retry
+
 from bot.config import config
 from bot.db.database import get_session_maker
 from bot.db.models import GenerationTask
@@ -19,6 +22,37 @@ logger = logging.getLogger(__name__)
 
 # Maximum retry attempts (handled by RQ, but we track in DB too)
 MAX_RETRIES = 3
+
+# RQ Queue instance (lazy initialization)
+_queue: Optional[Queue] = None
+
+
+def get_queue() -> Queue:
+    """Get or create the RQ queue instance."""
+    global _queue
+    if _queue is None:
+        redis_conn = Redis.from_url(config.redis_url)
+        _queue = Queue(connection=redis_conn)
+    return _queue
+
+
+def enqueue_generation_task(task_id: int) -> None:
+    """
+    Enqueue a generation task to RQ.
+    
+    Args:
+        task_id: Database ID of the GenerationTask
+    """
+    queue = get_queue()
+    
+    # Enqueue with retry policy: 3 attempts with exponential backoff
+    job = queue.enqueue(
+        process_generation_task,
+        task_id,
+        retry=Retry(max=MAX_RETRIES, interval=[10, 30, 60]),
+    )
+    
+    logger.info(f"Enqueued task {task_id} as job {job.id}")
 
 
 def process_generation_task(task_id: int) -> bool:
