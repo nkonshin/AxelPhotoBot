@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: telegram_bot_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-botuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-botpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-telegram_bot}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-botuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis for task queue
+  redis:
+    image: redis:7-alpine
+    container_name: telegram_bot_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # FastAPI application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telegram_bot_app
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botuser}:${POSTGRES_PASSWORD:-botpassword}@postgres:5432/${POSTGRES_DB:-telegram_bot}
+      REDIS_URL: redis://redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      INITIAL_TOKENS: ${INITIAL_TOKENS:-10}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./bot:/app/bot
+      - ./alembic:/app/alembic
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        echo 'Running migrations...' &&
+        alembic upgrade head &&
+        echo 'Starting FastAPI server...' &&
+        uvicorn bot.main:app --host 0.0.0.0 --port 8000
+      "
+    restart: unless-stopped
+
+  # RQ Worker for background tasks
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telegram_bot_worker
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botuser}:${POSTGRES_PASSWORD:-botpassword}@postgres:5432/${POSTGRES_DB:-telegram_bot}
+      REDIS_URL: redis://redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      INITIAL_TOKENS: ${INITIAL_TOKENS:-10}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./bot:/app/bot
+    command: python worker.py
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
