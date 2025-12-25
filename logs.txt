@@ -1,5 +1,103 @@
 root@ams-1-vm-cd6u:~/NanoBananaBot# docker-compose logs -f
 Attaching to telegram_bot_app, telegram_bot_worker, telegram_bot_db, telegram_bot_redis
+telegram_bot_redis | 1:C 25 Dec 2025 23:06:20.508 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
+telegram_bot_redis | 1:C 25 Dec 2025 23:06:20.510 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
+telegram_bot_redis | 1:C 25 Dec 2025 23:06:20.510 * Redis version=7.4.7, bits=64, commit=00000000, modified=0, pid=1, just started
+telegram_bot_redis | 1:C 25 Dec 2025 23:06:20.510 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.510 * Increased maximum number of open files to 10032 (it was originally set to 1024).
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.510 * monotonic clock: POSIX clock_gettime
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.513 * Running mode=standalone, port=6379.
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.514 * Server initialized
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.518 * Loading RDB produced by version 7.4.7
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.518 * RDB age 1608 seconds
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.518 * RDB memory usage when created 1.62 Mb
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.518 * Done loading RDB, keys loaded: 6, keys expired: 1.
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.518 * DB loaded from disk: 0.003 seconds
+telegram_bot_redis | 1:M 25 Dec 2025 23:06:20.518 * Ready to accept connections tcp
+telegram_bot_redis | 1:M 25 Dec 2025 23:11:21.050 * 100 changes in 300 seconds. Saving...
+telegram_bot_redis | 1:M 25 Dec 2025 23:11:21.052 * Background saving started by pid 191
+telegram_bot_redis | 191:C 25 Dec 2025 23:11:21.058 * DB saved on disk
+telegram_bot_redis | 191:C 25 Dec 2025 23:11:21.059 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+telegram_bot_redis | 1:M 25 Dec 2025 23:11:21.153 * Background saving terminated with success
+telegram_bot_worker | 2025-12-25 23:06:31,995 - __main__ - INFO - Connected to Redis at redis://redis:6379/0
+telegram_bot_worker | 2025-12-25 23:06:31,995 - __main__ - INFO - Listening on queue: default
+telegram_bot_worker | 2025-12-25 23:06:32,006 - __main__ - INFO - Starting RQ worker...
+telegram_bot_worker | 2025-12-25 23:06:32,007 - rq.worker - INFO - Worker b4f14770407d4038a79ec94790219757: started with PID 1, version 2.6.1
+telegram_bot_worker | 2025-12-25 23:06:32,007 - rq.worker - INFO - Worker b4f14770407d4038a79ec94790219757: subscribing to channel rq:pubsub:b4f14770407d4038a79ec94790219757
+telegram_bot_worker | 2025-12-25 23:06:32,008 - rq.worker - INFO - *** Listening on default...
+telegram_bot_worker | 2025-12-25 23:06:32,009 - rq.worker - INFO - Worker b4f14770407d4038a79ec94790219757: cleaning registries for queue: default
+telegram_bot_worker | 2025-12-25 23:07:28,735 - rq.worker - INFO - default: bot.tasks.generation.process_generation_task(5) (4e6e255d-6020-4df3-9db7-0b13320eca43)
+telegram_bot_worker | 2025-12-25 23:07:29,701 - bot.tasks.generation - INFO - Processing generation task 5
+telegram_bot_worker | 2025-12-25 23:07:29,877 - bot.tasks.generation - INFO - Task 5 status updated to processing
+telegram_bot_worker | 2025-12-25 23:07:29,927 - bot.services.image_provider - INFO - Generating image with model gpt-image-1.5, prompt: Создай изображение города Пермь в России, центр города, зима, все красиво украшено...
+telegram_bot_worker | 2025-12-25 23:08:04,550 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/images/generations "HTTP/1.1 200 OK"
+telegram_bot_worker | 2025-12-25 23:08:04,946 - bot.services.image_provider - INFO - Image generated successfully (base64)
+telegram_bot_worker | 2025-12-25 23:08:04,953 - bot.tasks.generation - INFO - Task 5 completed successfully
+telegram_bot_worker | 2025-12-25 23:08:07,815 - bot.tasks.generation - INFO - Result sent to user 208210577 for task 5
+telegram_bot_worker | 2025-12-25 23:08:08,076 - rq.worker - INFO - Successfully completed bot.tasks.generation.process_generation_task(5) job in 0:00:39.327247s on worker b4f14770407d4038a79ec94790219757
+telegram_bot_worker | 2025-12-25 23:08:08,076 - rq.worker - INFO - default: Job OK (4e6e255d-6020-4df3-9db7-0b13320eca43)
+telegram_bot_worker | 2025-12-25 23:08:08,076 - rq.worker - INFO - Result is kept for 500 seconds
+telegram_bot_worker | 2025-12-25 23:13:29,817 - rq.worker - INFO - default: bot.tasks.generation.process_generation_task(6) (a482c7bb-a869-46c1-b0c8-ea88d0a65882)
+telegram_bot_worker | 2025-12-25 23:13:30,662 - bot.tasks.generation - INFO - Processing generation task 6
+telegram_bot_worker | 2025-12-25 23:13:30,819 - bot.tasks.generation - INFO - Task 6 status updated to processing
+telegram_bot_worker | 2025-12-25 23:13:30,859 - bot.services.image_provider - INFO - Model gpt-image-1.5 doesn't support edit, using gpt-image-1
+telegram_bot_worker | 2025-12-25 23:13:30,860 - bot.services.image_provider - INFO - Editing image with model gpt-image-1, prompt: Кинематографичный гиперреалистичный крупный портрет, 8K, как Vogue-кадр. Лицо строго как у загруженн...
+telegram_bot_worker | 2025-12-25 23:13:33,104 - bot.services.image_provider - INFO - Downloaded image from Telegram: 139867 bytes
+telegram_bot_worker | 2025-12-25 23:13:33,355 - bot.services.image_provider - INFO - Sending to OpenAI edit endpoint, size: 139867 bytes
+telegram_bot_db | 
+telegram_bot_db | PostgreSQL Database directory appears to contain a database; Skipping initialization
+telegram_bot_db | 
+telegram_bot_db | 2025-12-25 23:06:20.699 UTC [1] LOG:  starting PostgreSQL 15.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+telegram_bot_db | 2025-12-25 23:06:20.701 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+telegram_bot_db | 2025-12-25 23:06:20.701 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+telegram_bot_db | 2025-12-25 23:06:20.705 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+telegram_bot_db | 2025-12-25 23:06:20.717 UTC [28] LOG:  database system was shut down at 2025-12-25 22:39:32 UTC
+telegram_bot_db | 2025-12-25 23:06:20.732 UTC [1] LOG:  database system is ready to accept connections
+telegram_bot_db | 2025-12-25 23:06:30.596 UTC [38] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:06:40.885 UTC [47] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:06:50.938 UTC [55] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:07:00.994 UTC [63] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:07:11.047 UTC [70] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:07:21.104 UTC [78] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:07:31.192 UTC [86] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:07:41.261 UTC [94] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:07:51.316 UTC [100] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:08:01.372 UTC [108] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:08:11.436 UTC [116] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:08:21.487 UTC [124] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:08:31.536 UTC [131] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:08:41.596 UTC [139] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:08:51.650 UTC [146] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:09:01.701 UTC [155] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:09:11.753 UTC [162] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:09:21.808 UTC [170] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:09:31.861 UTC [177] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:09:41.916 UTC [185] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:09:51.966 UTC [192] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:10:02.021 UTC [200] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:10:12.073 UTC [207] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:10:22.131 UTC [215] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:10:32.187 UTC [222] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:10:42.247 UTC [230] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:10:52.298 UTC [237] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:11:02.351 UTC [245] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:11:12.403 UTC [252] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:11:20.818 UTC [26] LOG:  checkpoint starting: time
+telegram_bot_db | 2025-12-25 23:11:21.233 UTC [26] LOG:  checkpoint complete: wrote 7 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.404 s, sync=0.003 s, total=0.416 s; sync files=6, longest=0.001 s, average=0.001 s; distance=8 kB, estimate=8 kB
+telegram_bot_db | 2025-12-25 23:11:22.459 UTC [260] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:11:32.515 UTC [267] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:11:42.566 UTC [275] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:11:52.620 UTC [282] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:12:02.678 UTC [290] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:12:12.733 UTC [299] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:12:22.788 UTC [307] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:12:32.857 UTC [314] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:12:42.916 UTC [322] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:12:52.977 UTC [329] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:13:03.030 UTC [337] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:13:13.083 UTC [344] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:13:23.138 UTC [352] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:13:33.189 UTC [360] FATAL:  database "botuser" does not exist
 telegram_bot_app | Waiting for database...
 telegram_bot_app | Running migrations...
 telegram_bot_app | INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
@@ -7,47 +105,57 @@ telegram_bot_app | INFO  [alembic.runtime.migration] Will assume transactional D
 telegram_bot_app | Starting FastAPI server...
 telegram_bot_app | INFO:     Started server process [11]
 telegram_bot_app | INFO:     Waiting for application startup.
-telegram_bot_app | 2025-12-25 22:31:01,316 - bot.main - INFO - Starting application...
-telegram_bot_app | 2025-12-25 22:31:01,429 - bot.main - INFO - Database initialized
-telegram_bot_app | 2025-12-25 22:31:01,444 - bot.bot - INFO - Bot instance created
-telegram_bot_app | 2025-12-25 22:31:01,444 - bot.bot - INFO - Dispatcher created with MemoryStorage
-telegram_bot_app | 2025-12-25 22:31:01,445 - bot.main - INFO - Handlers registered
-telegram_bot_app | 2025-12-25 22:31:01,606 - bot.main - INFO - Webhook set to: https://nkonshin7.ru/webhook
+telegram_bot_app | 2025-12-25 23:06:41,820 - bot.main - INFO - Starting application...
+telegram_bot_app | 2025-12-25 23:06:41,931 - bot.main - INFO - Database initialized
+telegram_bot_app | 2025-12-25 23:06:41,944 - bot.bot - INFO - Bot instance created
+telegram_bot_app | 2025-12-25 23:06:41,945 - bot.bot - INFO - Dispatcher created with MemoryStorage
+telegram_bot_app | 2025-12-25 23:06:41,945 - bot.main - INFO - Handlers registered
+telegram_bot_app | 2025-12-25 23:06:42,124 - bot.main - INFO - Webhook set to: https://nkonshin7.ru/webhook
 telegram_bot_app | INFO:     Application startup complete.
 telegram_bot_app | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-telegram_bot_redis | 1:C 25 Dec 2025 22:30:40.258 # WARNING Memory overcommit must be enabled! Without it, a background save or replication may fail under low memory condition. Being disabled, it can also cause failures without low memory condition, see https://github.com/jemalloc/jemalloc/issues/1328. To fix this issue add 'vm.overcommit_memory = 1' to /etc/sysctl.conf and then reboot or run the command 'sysctl vm.overcommit_memory=1' for this to take effect.
-telegram_bot_redis | 1:C 25 Dec 2025 22:30:40.259 * oO0OoO0OoO0Oo Redis is starting oO0OoO0OoO0Oo
-telegram_bot_redis | 1:C 25 Dec 2025 22:30:40.259 * Redis version=7.4.7, bits=64, commit=00000000, modified=0, pid=1, just started
-telegram_bot_redis | 1:C 25 Dec 2025 22:30:40.259 # Warning: no config file specified, using the default config. In order to specify a config file use redis-server /path/to/redis.conf
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.259 * Increased maximum number of open files to 10032 (it was originally set to 1024).
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.259 * monotonic clock: POSIX clock_gettime
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.263 * Running mode=standalone, port=6379.
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.264 * Server initialized
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.266 * Loading RDB produced by version 7.4.7
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.266 * RDB age 159 seconds
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.266 * RDB memory usage when created 1.61 Mb
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.267 * Done loading RDB, keys loaded: 5, keys expired: 1.
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.267 * DB loaded from disk: 0.002 seconds
-telegram_bot_redis | 1:M 25 Dec 2025 22:30:40.267 * Ready to accept connections tcp
-telegram_bot_worker | 2025-12-25 22:30:51,666 - __main__ - INFO - Connected to Redis at redis://redis:6379/0
-telegram_bot_worker | 2025-12-25 22:30:51,667 - __main__ - INFO - Listening on queue: default
-telegram_bot_worker | 2025-12-25 22:30:51,676 - __main__ - INFO - Starting RQ worker...
-telegram_bot_worker | 2025-12-25 22:30:51,676 - rq.worker - INFO - Worker 09e73efb54154f95bb13e4665ca28fdd: started with PID 1, version 2.6.1
-telegram_bot_worker | 2025-12-25 22:30:51,677 - rq.worker - INFO - Worker 09e73efb54154f95bb13e4665ca28fdd: subscribing to channel rq:pubsub:09e73efb54154f95bb13e4665ca28fdd
-telegram_bot_worker | 2025-12-25 22:30:51,678 - rq.worker - INFO - *** Listening on default...
-telegram_bot_worker | 2025-12-25 22:30:51,679 - rq.worker - INFO - Worker 09e73efb54154f95bb13e4665ca28fdd: cleaning registries for queue: default
-telegram_bot_db | 
-telegram_bot_db | PostgreSQL Database directory appears to contain a database; Skipping initialization
-telegram_bot_db | 
-telegram_bot_db | 2025-12-25 22:30:40.413 UTC [1] LOG:  starting PostgreSQL 15.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
-telegram_bot_db | 2025-12-25 22:30:40.413 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
-telegram_bot_db | 2025-12-25 22:30:40.413 UTC [1] LOG:  listening on IPv6 address "::", port 5432
-telegram_bot_db | 2025-12-25 22:30:40.416 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
-telegram_bot_db | 2025-12-25 22:30:40.428 UTC [27] LOG:  database system was shut down at 2025-12-25 22:28:01 UTC
-telegram_bot_db | 2025-12-25 22:30:40.457 UTC [1] LOG:  database system is ready to accept connections
-telegram_bot_db | 2025-12-25 22:30:50.343 UTC [37] FATAL:  database "botuser" does not exist
-telegram_bot_db | 2025-12-25 22:31:00.446 UTC [45] FATAL:  database "botuser" does not exist
-telegram_bot_db | 2025-12-25 22:31:10.505 UTC [54] FATAL:  database "botuser" does not exist
+telegram_bot_app | INFO:     172.18.0.1:52550 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:07:10,002 - aiogram.event - INFO - Update id=707992021 is handled. Duration 213 ms by bot id=8381024334
+telegram_bot_app | 2025-12-25 23:07:13,760 - aiogram.event - INFO - Update id=707992022 is handled. Duration 110 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:35812 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:07:16,118 - aiogram.event - INFO - Update id=707992023 is handled. Duration 113 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:35826 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:07:19,015 - aiogram.event - INFO - Update id=707992024 is handled. Duration 115 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:35836 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:07:20,204 - aiogram.event - INFO - Update id=707992025 is handled. Duration 117 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:35840 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:07:21,500 - bot.handlers.model - INFO - User 208210577 selected model gpt-image-1.5
+telegram_bot_app | INFO:     172.18.0.1:60942 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:07:21,501 - aiogram.event - INFO - Update id=707992026 is handled. Duration 197 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:60950 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:07:22,791 - aiogram.event - INFO - Update id=707992027 is handled. Duration 107 ms by bot id=8381024334
+telegram_bot_app | 2025-12-25 23:07:24,141 - aiogram.event - INFO - Update id=707992028 is handled. Duration 110 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:60960 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:60966 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:07:25,817 - aiogram.event - INFO - Update id=707992029 is handled. Duration 67 ms by bot id=8381024334
+telegram_bot_app | 2025-12-25 23:07:28,647 - bot.handlers.generate - INFO - Created generation task 5 for user 2
+telegram_bot_app | 2025-12-25 23:07:28,727 - bot.tasks.generation - INFO - Enqueued task 5 as job 4e6e255d-6020-4df3-9db7-0b13320eca43
+telegram_bot_app | 2025-12-25 23:07:28,839 - aiogram.event - INFO - Update id=707992030 is handled. Duration 209 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:60968 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:37196 - "GET /robots.txt HTTP/1.0" 404 Not Found
+telegram_bot_app | INFO:     172.18.0.1:37200 - "GET / HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:37520 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:12:47,966 - aiogram.event - INFO - Update id=707992031 is handled. Duration 228 ms by bot id=8381024334
+telegram_bot_app | 2025-12-25 23:12:50,328 - aiogram.event - INFO - Update id=707992032 is handled. Duration 137 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:37524 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:34988 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:12:54,736 - aiogram.event - INFO - Update id=707992033 is handled. Duration 123 ms by bot id=8381024334
+telegram_bot_app | 2025-12-25 23:12:55,743 - aiogram.event - INFO - Update id=707992034 is handled. Duration 124 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:34998 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:12:56,539 - aiogram.event - INFO - Update id=707992035 is handled. Duration 114 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:35012 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:50350 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:13:04,960 - aiogram.event - INFO - Update id=707992036 is handled. Duration 73 ms by bot id=8381024334
+telegram_bot_app | INFO:     172.18.0.1:45662 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:13:28,195 - aiogram.event - INFO - Update id=707992037 is handled. Duration 155 ms by bot id=8381024334
+telegram_bot_app | 2025-12-25 23:13:29,813 - bot.handlers.edit - INFO - Created edit task 6 for user 2
+telegram_bot_app | 2025-12-25 23:13:29,816 - bot.tasks.generation - INFO - Enqueued task 6 as job a482c7bb-a869-46c1-b0c8-ea88d0a65882
+telegram_bot_app | INFO:     172.18.0.1:45672 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2025-12-25 23:13:29,939 - aiogram.event - INFO - Update id=707992038 is handled. Duration 139 ms by bot id=8381024334
 Exception in thread Thread-5 (watch_events):
 Traceback (most recent call last):
   File "/usr/lib/python3.12/threading.py", line 1073, in _bootstrap_inner
@@ -63,86 +171,15 @@ Traceback (most recent call last):
     container = Container.from_id(self.client, event['id'])
                                                ~~~~~^^^^^^
 KeyError: 'id'
-telegram_bot_db | 2025-12-25 22:31:20.557 UTC [61] FATAL:  database "botuser" does not exist
-telegram_bot_app | INFO:     172.18.0.1:58300 - "POST /webhook HTTP/1.0" 200 OK
-telegram_bot_app | 2025-12-25 22:31:28,292 - aiogram.event - INFO - Update id=707992012 is handled. Duration 239 ms by bot id=8381024334
-telegram_bot_db | 2025-12-25 22:31:30.614 UTC [68] FATAL:  database "botuser" does not exist
-telegram_bot_app | INFO:     172.18.0.1:54996 - "POST /webhook HTTP/1.0" 200 OK
-telegram_bot_app | 2025-12-25 22:31:39,802 - aiogram.event - INFO - Update id=707992013 is handled. Duration 123 ms by bot id=8381024334
-telegram_bot_db | 2025-12-25 22:31:40.673 UTC [75] FATAL:  database "botuser" does not exist
-telegram_bot_app | INFO:     172.18.0.1:34916 - "POST /webhook HTTP/1.0" 200 OK
-telegram_bot_app | 2025-12-25 22:31:41,436 - aiogram.event - INFO - Update id=707992014 is handled. Duration 136 ms by bot id=8381024334
-telegram_bot_app | 2025-12-25 22:31:49,369 - aiogram.event - INFO - Update id=707992015 is handled. Duration 72 ms by bot id=8381024334
-telegram_bot_app | INFO:     172.18.0.1:34920 - "POST /webhook HTTP/1.0" 200 OK
-telegram_bot_db | 2025-12-25 22:31:50.733 UTC [82] FATAL:  database "botuser" does not exist
-telegram_bot_app | 2025-12-25 22:31:51,207 - bot.handlers.generate - INFO - Created generation task 4 for user 2
-telegram_bot_app | 2025-12-25 22:31:51,284 - bot.tasks.generation - INFO - Enqueued task 4 as job 87926102-eeb1-4225-8120-b194d5b2cc2a
-telegram_bot_worker | 2025-12-25 22:31:51,292 - rq.worker - INFO - default: bot.tasks.generation.process_generation_task(4) (87926102-eeb1-4225-8120-b194d5b2cc2a)
-telegram_bot_app | INFO:     172.18.0.1:42528 - "POST /webhook HTTP/1.0" 200 OK
-telegram_bot_app | 2025-12-25 22:31:51,410 - aiogram.event - INFO - Update id=707992016 is handled. Duration 223 ms by bot id=8381024334
-telegram_bot_worker | 2025-12-25 22:31:52,216 - bot.tasks.generation - INFO - Processing generation task 4
-telegram_bot_worker | 2025-12-25 22:31:52,387 - bot.tasks.generation - INFO - Task 4 status updated to processing
-telegram_bot_worker | 2025-12-25 22:31:52,427 - bot.services.image_provider - INFO - Generating image with model gpt-image-1, prompt: Создай изображение города Пермь в России, центр города, зима, все красиво украшено...
-telegram_bot_db | 2025-12-25 22:32:00.844 UTC [91] FATAL:  database "botuser" does not exist
-telegram_bot_db | 2025-12-25 22:32:10.895 UTC [97] FATAL:  database "botuser" does not exist
-telegram_bot_db | 2025-12-25 22:32:20.944 UTC [105] FATAL:  database "botuser" does not exist
-telegram_bot_app | INFO:     172.18.0.1:34294 - "GET /.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:34302 - "GET /marketing/.env.staging HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:34316 - "GET /environments/test/.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:34320 - "GET /aws/konfig/aws_auth.php HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:34322 - "GET /administration/.env.dev HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:34328 - "GET /.env.test.localapi/.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:34336 - "GET /config/env/mandrill.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54092 - "GET /app/config/.env.staging HTTP/1.0" 404 Not Found
-telegram_bot_db | 2025-12-25 22:32:30.998 UTC [112] FATAL:  database "botuser" does not exist
-telegram_bot_app | INFO:     172.18.0.1:54098 - "GET /config/.env.credentials HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54100 - "GET /application/.env.sample HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54102 - "GET /config/development/.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54112 - "GET /?redirect=/var/www/.env HTTP/1.0" 200 OK
-telegram_bot_app | INFO:     172.18.0.1:54120 - "GET /config/aws_settings.php HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54132 - "GET /?uri=/var/www/html/.env HTTP/1.0" 200 OK
-telegram_bot_app | INFO:     172.18.0.1:54144 - "GET /config/env/sendgrid.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54150 - "GET /config/environment/.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54156 - "GET /backend/.env.production HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54158 - "GET /config/.env.development HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54174 - "GET /konfig/aws_settings.php HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54180 - "GET /?target=/home/user/.env HTTP/1.0" 200 OK
-telegram_bot_app | INFO:     172.18.0.1:54196 - "GET /current/.env.production HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54212 - "GET /dashboard/.env.disabled HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54226 - "GET /dashboard/.env.settings HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54236 - "GET /legacy/tests/9.1.1/.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54238 - "GET /develop/.env.production HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54244 - "GET /legacy/tests/9.2.0/.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54246 - "GET /laravel/core/.env.local HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:54254 - "GET /src/main/resources/.env HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:36008 - "GET /staging/.env.production HTTP/1.0" 404 Not Found
-telegram_bot_db | 2025-12-25 22:32:41.054 UTC [120] FATAL:  database "botuser" does not exist
-telegram_bot_app | INFO:     172.18.0.1:36022 - "GET /private/.env.production HTTP/1.0" 404 Not Found
-telegram_bot_app | INFO:     172.18.0.1:36036 - "GET /secrets/aws/session.yml HTTP/1.0" 404 Not Found
-telegram_bot_worker | 2025-12-25 22:32:43,273 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/images/generations "HTTP/1.1 200 OK"
-telegram_bot_worker | 2025-12-25 22:32:43,794 - bot.services.image_provider - INFO - Image generated successfully: None
-telegram_bot_worker | 2025-12-25 22:32:43,795 - bot.tasks.generation - WARNING - Task 4 generation failed: Unknown error
-telegram_bot_worker | 2025-12-25 22:32:43,795 - bot.tasks.generation - ERROR - Task 4 failed with error: Unknown error
-telegram_bot_worker | 2025-12-25 22:32:43,810 - bot.tasks.generation - INFO - Task 4 retry 1/3, re-queuing...
-telegram_bot_worker | 2025-12-25 22:32:43,817 - rq.worker - ERROR - Worker 09e73efb54154f95bb13e4665ca28fdd: job 87926102-eeb1-4225-8120-b194d5b2cc2a: exception raised while executing (bot.tasks.generation.process_generation_task)
-telegram_bot_worker | Traceback (most recent call last):
-telegram_bot_worker |   File "/usr/local/lib/python3.11/site-packages/rq/worker.py", line 1439, in perform_job
-telegram_bot_worker |     return_value = job.perform()
-telegram_bot_worker |                    ^^^^^^^^^^^^^
-telegram_bot_worker |   File "/usr/local/lib/python3.11/site-packages/rq/job.py", line 1318, in perform
-telegram_bot_worker |     self._result = self._execute()
-telegram_bot_worker |                    ^^^^^^^^^^^^^^^
-telegram_bot_worker |   File "/usr/local/lib/python3.11/site-packages/rq/job.py", line 1376, in _execute
-telegram_bot_worker |     result = self.func(*self.args, **self.kwargs)
-telegram_bot_worker |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-telegram_bot_worker |   File "/app/bot/tasks/generation.py", line 79, in process_generation_task
-telegram_bot_worker |     return asyncio.get_event_loop().run_until_complete(
-telegram_bot_worker |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-telegram_bot_worker |   File "/usr/local/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
-telegram_bot_worker |     return future.result()
-telegram_bot_worker |            ^^^^^^^^^^^^^^^
-telegram_bot_worker |   File "/app/bot/tasks/generation.py", line 158, in _process_generation_task_async
-telegram_bot_worker |     raise GenerationError(error_msg)
-telegram_bot_worker | bot.tasks.generation.GenerationError: Unknown error
-telegram_bot_worker | 
-telegram_bot_worker | 2025-12-25 22:32:43,822 - rq.job - INFO - Job 87926102-eeb1-4225-8120-b194d5b2cc2a: scheduled for retry at 2025-12-25 22:32:53.819745+00:00, 2 remaining
+telegram_bot_db | 2025-12-25 23:13:43.251 UTC [368] FATAL:  database "botuser" does not exist
+telegram_bot_db | 2025-12-25 23:13:53.312 UTC [375] FATAL:  database "botuser" does not exist
+telegram_bot_worker | 2025-12-25 23:13:56,578 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/images/edits "HTTP/1.1 200 OK"
+telegram_bot_worker | 2025-12-25 23:13:57,049 - bot.services.image_provider - INFO - Image edited successfully (base64)
+telegram_bot_worker | 2025-12-25 23:13:57,060 - bot.tasks.generation - INFO - Task 6 completed successfully
+telegram_bot_worker | 2025-12-25 23:13:57,731 - bot.tasks.generation - INFO - Result sent to user 208210577 for task 6
+telegram_bot_worker | 2025-12-25 23:13:57,987 - rq.worker - INFO - Successfully completed bot.tasks.generation.process_generation_task(6) job in 0:00:28.159290s on worker b4f14770407d4038a79ec94790219757
+telegram_bot_worker | 2025-12-25 23:13:57,987 - rq.worker - INFO - default: Job OK (a482c7bb-a869-46c1-b0c8-ea88d0a65882)
+telegram_bot_worker | 2025-12-25 23:13:57,987 - rq.worker - INFO - Result is kept for 500 seconds
+telegram_bot_db | 2025-12-25 23:14:03.371 UTC [384] FATAL:  database "botuser" does not exist
+^CERROR: Aborting.
+root@ams-1-vm-cd6u:~/NanoBananaBot# 
