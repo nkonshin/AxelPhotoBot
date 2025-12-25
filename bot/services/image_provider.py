@@ -1,5 +1,6 @@
 """Image provider service for AI image generation."""
 
+import base64
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ class GenerationResult:
     """Result of an image generation/edit operation."""
     
     success: bool
+    image_base64: Optional[str] = None
     image_url: Optional[str] = None
     error: Optional[str] = None
 
@@ -24,36 +26,16 @@ class ImageProvider(ABC):
     
     @abstractmethod
     async def generate(self, prompt: str, model: str = None) -> GenerationResult:
-        """
-        Generate an image from a text prompt.
-        
-        Args:
-            prompt: Text description of the image to generate
-            model: Model to use (optional, uses default if not specified)
-        
-        Returns:
-            GenerationResult with success status and image URL or error
-        """
         pass
     
     @abstractmethod
     async def edit(self, image_source: str, prompt: str, bot_token: str = None, model: str = None) -> GenerationResult:
-        """
-        Edit an existing image based on a text prompt.
-        
-        Args:
-            image_source: URL or Telegram file_id of the source image
-            prompt: Text description of the desired changes
-            bot_token: Telegram bot token (required if image_source is file_id)
-            model: Model to use (optional, uses default if not specified)
-        
-        Returns:
-            GenerationResult with success status and image URL or error
-        """
         pass
 
 
 # Available models for generation
+# gpt-image-1: Standard GPT image model
+# gpt-image-1.5: Improved GPT image model (generation only, not edit)
 AVAILABLE_MODELS = {
     "gpt-image-1": "GPT Image 1 (Стандартная)",
     "gpt-image-1.5": "GPT Image 1.5 (Улучшенная)",
@@ -66,13 +48,6 @@ class OpenAIImageProvider(ImageProvider):
     """OpenAI Images API implementation of ImageProvider."""
     
     def __init__(self, api_key: str, model: str = DEFAULT_MODEL):
-        """
-        Initialize OpenAI image provider.
-        
-        Args:
-            api_key: OpenAI API key
-            model: Model to use for generation (default: gpt-image-1)
-        """
         self.api_key = api_key
         self.model = model
         self.client = AsyncOpenAI(api_key=api_key)
@@ -80,18 +55,14 @@ class OpenAIImageProvider(ImageProvider):
     async def generate(self, prompt: str, model: str = None) -> GenerationResult:
         """
         Generate an image using OpenAI Images API.
-        
-        Args:
-            prompt: Text description of the image to generate
-            model: Model to use (optional, uses instance default if not specified)
-        
-        Returns:
-            GenerationResult with success status and image URL or error
+        GPT image models always return base64.
         """
         use_model = model or self.model
         logger.info(f"Generating image with model {use_model}, prompt: {prompt[:100]}...")
         
         try:
+            # GPT image models don't support response_format parameter
+            # They always return b64_json
             response = await self.client.images.generate(
                 model=use_model,
                 prompt=prompt,
@@ -99,18 +70,32 @@ class OpenAIImageProvider(ImageProvider):
                 size="1024x1024",
             )
             
-            image_url = response.data[0].url
-            logger.info(f"Image generated successfully: {image_url}")
+            image_data = response.data[0]
             
-            return GenerationResult(
-                success=True,
-                image_url=image_url,
-            )
+            # GPT image models return b64_json
+            if hasattr(image_data, 'b64_json') and image_data.b64_json:
+                logger.info(f"Image generated successfully (base64)")
+                return GenerationResult(
+                    success=True,
+                    image_base64=image_data.b64_json,
+                )
+            # DALL-E models may return URL
+            elif hasattr(image_data, 'url') and image_data.url:
+                logger.info(f"Image generated successfully (URL)")
+                return GenerationResult(
+                    success=True,
+                    image_url=image_data.url,
+                )
+            else:
+                logger.error(f"OpenAI returned empty response. Data: {image_data}")
+                return GenerationResult(
+                    success=False,
+                    error="OpenAI не вернул изображение",
+                )
         
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Image generation failed: {error_msg}")
-            
             return GenerationResult(
                 success=False,
                 error=error_msg,
@@ -119,25 +104,21 @@ class OpenAIImageProvider(ImageProvider):
     async def edit(self, image_source: str, prompt: str, bot_token: str = None, model: str = None) -> GenerationResult:
         """
         Edit an image using OpenAI Images API.
-        
-        Args:
-            image_source: URL or Telegram file_id of the source image
-            prompt: Text description of the desired changes
-            bot_token: Telegram bot token (required if image_source is file_id)
-            model: Model to use (optional, uses instance default if not specified)
-        
-        Returns:
-            GenerationResult with success status and image URL or error
+        Note: Edit endpoint only supports gpt-image-1 and dall-e-2 (NOT gpt-image-1.5)
         """
+        # Edit only supports gpt-image-1 and dall-e-2
         use_model = model or self.model
-        logger.info(f"Editing image {image_source} with model {use_model}, prompt: {prompt[:100]}...")
+        if use_model == "gpt-image-1.5":
+            use_model = "gpt-image-1"  # Fallback for edit
+            logger.info(f"Model gpt-image-1.5 doesn't support edit, using gpt-image-1")
+        
+        logger.info(f"Editing image with model {use_model}, prompt: {prompt[:100]}...")
         
         try:
             import httpx
             import io
             
-            image_data: bytes
-            file_extension = "png"  # Default extension
+            image_bytes: bytes
             
             # Check if image_source is a URL or Telegram file_id
             if image_source.startswith(('http://', 'https://')):
@@ -145,13 +126,7 @@ class OpenAIImageProvider(ImageProvider):
                 async with httpx.AsyncClient() as http_client:
                     img_response = await http_client.get(image_source)
                     img_response.raise_for_status()
-                    image_data = img_response.content
-                    
-                    # Try to get extension from URL
-                    if '.jpg' in image_source or '.jpeg' in image_source:
-                        file_extension = "jpg"
-                    elif '.webp' in image_source:
-                        file_extension = "webp"
+                    image_bytes = img_response.content
             else:
                 # It's a Telegram file_id - download from Telegram
                 if not bot_token:
@@ -165,37 +140,20 @@ class OpenAIImageProvider(ImageProvider):
                     # Get file info
                     file = await bot.get_file(image_source)
                     
-                    # Get extension from file path
-                    if file.file_path:
-                        if file.file_path.endswith('.jpg') or file.file_path.endswith('.jpeg'):
-                            file_extension = "jpg"
-                        elif file.file_path.endswith('.webp'):
-                            file_extension = "webp"
-                        elif file.file_path.endswith('.png'):
-                            file_extension = "png"
+                    # Download file to memory
+                    file_buffer = io.BytesIO()
+                    await bot.download_file(file.file_path, file_buffer)
+                    image_bytes = file_buffer.getvalue()
                     
-                    # Download file
-                    file_bytes = io.BytesIO()
-                    await bot.download_file(file.file_path, file_bytes)
-                    image_data = file_bytes.getvalue()
-                    
-                    logger.info(f"Downloaded image from Telegram: {len(image_data)} bytes, extension: {file_extension}")
+                    logger.info(f"Downloaded image from Telegram: {len(image_bytes)} bytes")
                 finally:
                     await bot.session.close()
             
-            # Determine MIME type
-            mime_types = {
-                "jpg": "image/jpeg",
-                "jpeg": "image/jpeg", 
-                "png": "image/png",
-                "webp": "image/webp",
-            }
-            mime_type = mime_types.get(file_extension, "image/png")
+            # Create file-like object for OpenAI API
+            image_file = io.BytesIO(image_bytes)
+            image_file.name = "image.png"  # OpenAI needs a filename
             
-            # Create file tuple for OpenAI API: (filename, content, mime_type)
-            image_file = (f"image.{file_extension}", image_data, mime_type)
-            
-            logger.info(f"Sending to OpenAI with MIME type: {mime_type}")
+            logger.info(f"Sending to OpenAI edit endpoint, size: {len(image_bytes)} bytes")
             
             # Use OpenAI edit endpoint
             response = await self.client.images.edit(
@@ -206,18 +164,32 @@ class OpenAIImageProvider(ImageProvider):
                 size="1024x1024",
             )
             
-            result_url = response.data[0].url
-            logger.info(f"Image edited successfully: {result_url}")
+            image_data = response.data[0]
             
-            return GenerationResult(
-                success=True,
-                image_url=result_url,
-            )
+            # GPT image models return b64_json
+            if hasattr(image_data, 'b64_json') and image_data.b64_json:
+                logger.info(f"Image edited successfully (base64)")
+                return GenerationResult(
+                    success=True,
+                    image_base64=image_data.b64_json,
+                )
+            # DALL-E 2 may return URL
+            elif hasattr(image_data, 'url') and image_data.url:
+                logger.info(f"Image edited successfully (URL)")
+                return GenerationResult(
+                    success=True,
+                    image_url=image_data.url,
+                )
+            else:
+                logger.error(f"OpenAI edit returned empty response")
+                return GenerationResult(
+                    success=False,
+                    error="OpenAI не вернул изображение",
+                )
         
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Image edit failed: {error_msg}")
-            
             return GenerationResult(
                 success=False,
                 error=error_msg,

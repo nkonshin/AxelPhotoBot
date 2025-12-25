@@ -90,8 +90,8 @@ async def menu_model(callback: CallbackQuery, state: FSMContext) -> None:
         current_model = user.selected_model if user else "gpt-image-1"
     
     model_names = {
-        "gpt-image-1": "GPT-Image-1 (Стандартная)",
-        "gpt-image-1.5": "GPT-Image-1.5 (Улучшенная)",
+        "gpt-image-1": "GPT Image 1 (Стандартная)",
+        "gpt-image-1.5": "GPT Image 1.5 (Улучшенная)",
     }
     model_name = model_names.get(current_model, current_model)
     

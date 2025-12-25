@@ -153,14 +153,14 @@ def model_keyboard(current_model: str = "gpt-image-1") -> InlineKeyboardMarkup:
         current_model: Currently selected model
     
     Layout:
-    [GPT-Image-1 ✓] or [GPT-Image-1]
-    [GPT-Image-1.5 ✓] or [GPT-Image-1.5]
+    [GPT Image 1 ✓] or [GPT Image 1]
+    [GPT Image 1.5 ✓] or [GPT Image 1.5]
     [◀️ Назад в меню]
     """
     builder = InlineKeyboardBuilder()
     
-    # GPT-Image-1
-    gpt1_text = "✅ GPT-Image-1 (Стандартная)" if current_model == "gpt-image-1" else "GPT-Image-1 (Стандартная)"
+    # GPT Image 1
+    gpt1_text = "✅ GPT Image 1 (Стандартная)" if current_model == "gpt-image-1" else "GPT Image 1 (Стандартная)"
     builder.row(
         InlineKeyboardButton(
             text=gpt1_text,
@@ -168,8 +168,8 @@ def model_keyboard(current_model: str = "gpt-image-1") -> InlineKeyboardMarkup:
         )
     )
     
-    # GPT-Image-1.5
-    gpt15_text = "✅ GPT-Image-1.5 (Улучшенная)" if current_model == "gpt-image-1.5" else "GPT-Image-1.5 (Улучшенная)"
+    # GPT Image 1.5
+    gpt15_text = "✅ GPT Image 1.5 (Улучшенная)" if current_model == "gpt-image-1.5" else "GPT Image 1.5 (Улучшенная)"
     builder.row(
         InlineKeyboardButton(
             text=gpt15_text,

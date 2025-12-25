@@ -138,17 +138,24 @@ async def _process_generation_task_async(task_id: int) -> bool:
             else:
                 raise ValueError(f"Unknown task type: {task.task_type}")
             
-            if result.success and result.image_url:
+            if result.success and (result.image_url or result.image_base64):
                 # Success - update task with result
+                image_to_send = result.image_url
+                
+                # If we got base64, we need to send it differently
+                if result.image_base64 and not result.image_url:
+                    # We'll send base64 as bytes to Telegram
+                    image_to_send = result.image_base64
+                
                 await task_repo.update_status(
                     task_id,
                     status="done",
-                    result_image_url=result.image_url,
+                    result_image_url=result.image_url or "base64_image",
                 )
                 logger.info(f"Task {task_id} completed successfully")
                 
                 # Send result to user via Telegram
-                await _send_result_to_user(task, result.image_url)
+                await _send_result_to_user(task, image_to_send, is_base64=result.image_base64 is not None and result.image_url is None)
                 
                 return True
             else:
@@ -206,16 +213,19 @@ class GenerationError(Exception):
     pass
 
 
-async def _send_result_to_user(task: GenerationTask, image_url: str) -> None:
+async def _send_result_to_user(task: GenerationTask, image_data: str, is_base64: bool = False) -> None:
     """
     Send generated image to user via Telegram.
     
     Args:
         task: GenerationTask with user info
-        image_url: URL of the generated image
+        image_data: URL of the generated image or base64 string
+        is_base64: Whether image_data is base64 encoded
     """
     try:
         from aiogram import Bot
+        from aiogram.types import BufferedInputFile
+        import base64
         
         bot = Bot(token=config.bot_token)
         
@@ -236,13 +246,24 @@ async def _send_result_to_user(task: GenerationTask, image_url: str) -> None:
         
         # Send image to user
         task_type_text = "Картинка создана" if task.task_type == "generate" else "Фото отредактировано"
-        caption = f"✅ {task_type_text}!\n\nПромпт: {task.prompt[:200]}..."
+        caption = f"✅ {task_type_text}!\n\nПромпт: {task.prompt[:200]}..." if len(task.prompt) > 200 else f"✅ {task_type_text}!\n\nПромпт: {task.prompt}"
         
-        await bot.send_photo(
-            chat_id=telegram_id,
-            photo=image_url,
-            caption=caption if len(task.prompt) > 200 else f"✅ {task_type_text}!\n\nПромпт: {task.prompt}",
-        )
+        if is_base64:
+            # Decode base64 and send as file
+            image_bytes = base64.b64decode(image_data)
+            photo = BufferedInputFile(image_bytes, filename="generated_image.png")
+            await bot.send_photo(
+                chat_id=telegram_id,
+                photo=photo,
+                caption=caption,
+            )
+        else:
+            # Send URL directly
+            await bot.send_photo(
+                chat_id=telegram_id,
+                photo=image_data,
+                caption=caption,
+            )
         
         logger.info(f"Result sent to user {telegram_id} for task {task.id}")
         
