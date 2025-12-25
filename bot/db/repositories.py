@@ -76,6 +76,31 @@ class UserRepository:
         await self.session.refresh(user)
         
         return user
+    
+    async def update_model(self, user_id: int, model: str) -> Optional[User]:
+        """
+        Update user's selected model.
+        
+        Args:
+            user_id: User's database ID
+            model: Model name to set
+        
+        Returns:
+            Updated user or None if not found
+        """
+        result = await self.session.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if user is None:
+            return None
+        
+        user.selected_model = model
+        await self.session.commit()
+        await self.session.refresh(user)
+        
+        return user
 
 
 class TaskRepository:

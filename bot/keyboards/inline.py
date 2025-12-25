@@ -145,29 +145,38 @@ def back_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def model_keyboard() -> InlineKeyboardMarkup:
+def model_keyboard(current_model: str = "gpt-image-1") -> InlineKeyboardMarkup:
     """
     Create model selection keyboard.
     
+    Args:
+        current_model: Currently selected model
+    
     Layout:
-    [GPT-Image-1 (текущая) ✓]
-    [🔜 Скоро будут новые модели]
+    [GPT-Image-1 ✓] or [GPT-Image-1]
+    [GPT-Image-1.5 ✓] or [GPT-Image-1.5]
     [◀️ Назад в меню]
     """
     builder = InlineKeyboardBuilder()
     
+    # GPT-Image-1
+    gpt1_text = "✅ GPT-Image-1 (Стандартная)" if current_model == "gpt-image-1" else "GPT-Image-1 (Стандартная)"
     builder.row(
         InlineKeyboardButton(
-            text="✅ GPT-Image-1 (текущая)",
+            text=gpt1_text,
             callback_data="model:gpt-image-1",
         )
     )
+    
+    # GPT-Image-1.5
+    gpt15_text = "✅ GPT-Image-1.5 (Улучшенная)" if current_model == "gpt-image-1.5" else "GPT-Image-1.5 (Улучшенная)"
     builder.row(
         InlineKeyboardButton(
-            text="🔜 Скоро будут новые модели",
-            callback_data="model:coming_soon",
+            text=gpt15_text,
+            callback_data="model:gpt-image-1.5",
         )
     )
+    
     builder.row(
         InlineKeyboardButton(
             text="◀️ Назад в меню",

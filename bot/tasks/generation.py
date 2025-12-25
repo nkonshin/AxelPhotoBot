@@ -110,8 +110,17 @@ async def _process_generation_task_async(task_id: int) -> bool:
         logger.info(f"Task {task_id} status updated to processing")
         
         try:
-            # Initialize image provider
-            image_provider = OpenAIImageProvider(api_key=config.openai_api_key)
+            # Get user's selected model
+            from sqlalchemy import select
+            from bot.db.models import User
+            
+            user_result = await session.execute(
+                select(User.selected_model).where(User.id == task.user_id)
+            )
+            user_model = user_result.scalar_one_or_none() or "gpt-image-1"
+            
+            # Initialize image provider with user's selected model
+            image_provider = OpenAIImageProvider(api_key=config.openai_api_key, model=user_model)
             
             # Generate or edit based on task type
             result: GenerationResult

@@ -80,14 +80,28 @@ async def menu_model(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle 'Выбрать модель' button."""
     await state.clear()
     
+    # Get user's current model
+    user_tg = callback.from_user
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_telegram_id(user_tg.id)
+        current_model = user.selected_model if user else "gpt-image-1"
+    
+    model_names = {
+        "gpt-image-1": "GPT-Image-1 (Стандартная)",
+        "gpt-image-1.5": "GPT-Image-1.5 (Улучшенная)",
+    }
+    model_name = model_names.get(current_model, current_model)
+    
     await callback.message.edit_text(
         text=(
             "🤖 <b>Выбор модели</b>\n\n"
-            "Текущая модель для генерации изображений:\n\n"
-            "✅ <b>GPT-Image-1</b> — высокое качество, "
-            "отличная детализация"
+            f"Текущая модель: <b>{model_name}</b>\n\n"
+            "Выберите модель для генерации изображений:"
         ),
-        reply_markup=model_keyboard(),
+        reply_markup=model_keyboard(current_model),
     )
     await callback.answer()
 
@@ -154,21 +168,6 @@ async def menu_guide(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 # Handle placeholder buttons
-@router.callback_query(F.data == "model:gpt-image-1")
-async def model_selected(callback: CallbackQuery) -> None:
-    """Handle model selection (currently only one model)."""
-    await callback.answer("GPT-Image-1 уже выбрана!", show_alert=False)
-
-
-@router.callback_query(F.data == "model:coming_soon")
-async def model_coming_soon(callback: CallbackQuery) -> None:
-    """Handle 'coming soon' model button."""
-    await callback.answer(
-        "Новые модели скоро будут доступны! 🚀",
-        show_alert=True,
-    )
-
-
 @router.callback_query(F.data == "tokens:coming_soon")
 async def tokens_coming_soon(callback: CallbackQuery) -> None:
     """Handle 'coming soon' tokens button."""
