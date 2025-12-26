@@ -238,10 +238,7 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
         balance = user.tokens
         quality = user.image_quality
         size = user.image_size
-
         model = user.selected_model
-        if model == "gpt-image-1.5":
-            model = "gpt-image-1"
 
     cost = estimate_image_tokens(quality, size)
 

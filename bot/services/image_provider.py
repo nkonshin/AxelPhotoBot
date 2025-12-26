@@ -47,9 +47,9 @@ class ImageProvider(ABC):
         pass
 
 
-# Available models for generation
+# Available models for generation and editing
 # gpt-image-1: Standard GPT image model
-# gpt-image-1.5: Improved GPT image model (generation only, not edit)
+# gpt-image-1.5: Improved GPT image model
 AVAILABLE_MODELS = {
     "gpt-image-1": "GPT Image 1 (Стандартная)",
     "gpt-image-1.5": "GPT Image 1.5 (Улучшенная)",
@@ -133,13 +133,9 @@ class OpenAIImageProvider(ImageProvider):
     ) -> GenerationResult:
         """
         Edit an image using OpenAI Images API.
-        Note: Edit endpoint only supports gpt-image-1 and dall-e-2 (NOT gpt-image-1.5)
+        Supports: gpt-image-1, gpt-image-1.5, dall-e-2
         """
-        # Edit only supports gpt-image-1 and dall-e-2
         use_model = model or self.model
-        if use_model == "gpt-image-1.5":
-            use_model = "gpt-image-1"  # Fallback for edit
-            logger.info(f"Model gpt-image-1.5 doesn't support edit, using gpt-image-1")
         
         logger.info(f"Editing image with model {use_model}, prompt: {prompt[:100]}...")
         
