@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import config
 from bot.db.models import User, GenerationTask
+from bot.services.image_tokens import estimate_image_tokens
 
 
 class UserRepository:
@@ -39,12 +40,14 @@ class UserRepository:
         if user is not None:
             return user, False
         
+        default_image_tokens = estimate_image_tokens("medium", "1024x1024")
+
         # Create new user with initial tokens
         user = User(
             telegram_id=telegram_id,
             username=username,
             first_name=first_name,
-            tokens=config.initial_tokens,
+            tokens=config.initial_tokens * default_image_tokens,
         )
         self.session.add(user)
         await self.session.commit()
@@ -102,6 +105,33 @@ class UserRepository:
         
         return user
 
+    async def update_image_settings(
+        self,
+        user_id: int,
+        image_quality: Optional[str] = None,
+        image_size: Optional[str] = None,
+    ) -> Optional[User]:
+        """Update user's image generation settings."""
+
+        result = await self.session.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            return None
+
+        if image_quality is not None:
+            user.image_quality = image_quality
+
+        if image_size is not None:
+            user.image_size = image_size
+
+        await self.session.commit()
+        await self.session.refresh(user)
+
+        return user
+
 
 class TaskRepository:
     """Repository for GenerationTask CRUD operations."""
@@ -115,6 +145,9 @@ class TaskRepository:
         task_type: str,
         prompt: str,
         tokens_spent: int,
+        model: str = "gpt-image-1",
+        image_quality: str = "medium",
+        image_size: str = "1024x1024",
         source_image_url: Optional[str] = None,
     ) -> GenerationTask:
         """
@@ -133,6 +166,9 @@ class TaskRepository:
         task = GenerationTask(
             user_id=user_id,
             task_type=task_type,
+            model=model,
+            image_quality=image_quality,
+            image_size=image_size,
             prompt=prompt,
             tokens_spent=tokens_spent,
             source_image_url=source_image_url,
@@ -149,6 +185,7 @@ class TaskRepository:
         task_id: int,
         status: str,
         result_image_url: Optional[str] = None,
+        result_file_id: Optional[str] = None,
         error_message: Optional[str] = None,
         increment_retry: bool = False,
     ) -> Optional[GenerationTask]:
@@ -177,6 +214,9 @@ class TaskRepository:
         
         if result_image_url is not None:
             task.result_image_url = result_image_url
+
+        if result_file_id is not None:
+            task.result_file_id = result_file_id
         
         if error_message is not None:
             task.error_message = error_message

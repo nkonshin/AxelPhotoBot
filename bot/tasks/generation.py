@@ -110,22 +110,21 @@ async def _process_generation_task_async(task_id: int) -> bool:
         logger.info(f"Task {task_id} status updated to processing")
         
         try:
-            # Get user's selected model
-            from sqlalchemy import select
-            from bot.db.models import User
-            
-            user_result = await session.execute(
-                select(User.selected_model).where(User.id == task.user_id)
+            # Initialize image provider with task model
+            image_provider = OpenAIImageProvider(
+                api_key=config.openai_api_key,
+                model=task.model or "gpt-image-1",
             )
-            user_model = user_result.scalar_one_or_none() or "gpt-image-1"
-            
-            # Initialize image provider with user's selected model
-            image_provider = OpenAIImageProvider(api_key=config.openai_api_key, model=user_model)
             
             # Generate or edit based on task type
             result: GenerationResult
             if task.task_type == "generate":
-                result = await image_provider.generate(task.prompt)
+                result = await image_provider.generate(
+                    task.prompt,
+                    model=task.model,
+                    quality=task.image_quality,
+                    size=task.image_size,
+                )
             elif task.task_type == "edit":
                 if task.source_image_url is None:
                     raise ValueError("Edit task requires source_image_url")
@@ -133,29 +132,33 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 result = await image_provider.edit(
                     task.source_image_url,
                     task.prompt,
-                    bot_token=config.bot_token
+                    bot_token=config.bot_token,
+                    model=task.model,
+                    quality=task.image_quality,
+                    size=task.image_size,
                 )
             else:
                 raise ValueError(f"Unknown task type: {task.task_type}")
             
             if result.success and (result.image_url or result.image_base64):
+                # Send result to user via Telegram
+                file_id = await _send_result_to_user(
+                    task,
+                    result.image_url or result.image_base64 or "",
+                    is_base64=result.image_base64 is not None and result.image_url is None,
+                )
+
+                if not file_id:
+                    raise GenerationError("Failed to send result to user")
+
                 # Success - update task with result
-                image_to_send = result.image_url
-                
-                # If we got base64, we need to send it differently
-                if result.image_base64 and not result.image_url:
-                    # We'll send base64 as bytes to Telegram
-                    image_to_send = result.image_base64
-                
                 await task_repo.update_status(
                     task_id,
                     status="done",
-                    result_image_url=result.image_url or "base64_image",
+                    result_image_url=result.image_url,
+                    result_file_id=file_id,
                 )
                 logger.info(f"Task {task_id} completed successfully")
-                
-                # Send result to user via Telegram
-                await _send_result_to_user(task, image_to_send, is_base64=result.image_base64 is not None and result.image_url is None)
                 
                 return True
             else:
@@ -213,7 +216,11 @@ class GenerationError(Exception):
     pass
 
 
-async def _send_result_to_user(task: GenerationTask, image_data: str, is_base64: bool = False) -> None:
+async def _send_result_to_user(
+    task: GenerationTask,
+    image_data: str,
+    is_base64: bool = False,
+) -> Optional[str]:
     """
     Send generated image to user via Telegram.
     
@@ -226,6 +233,7 @@ async def _send_result_to_user(task: GenerationTask, image_data: str, is_base64:
         from aiogram import Bot
         from aiogram.types import BufferedInputFile
         import base64
+        import re
         
         bot = Bot(token=config.bot_token)
         
@@ -242,35 +250,49 @@ async def _send_result_to_user(task: GenerationTask, image_data: str, is_base64:
             
             if telegram_id is None:
                 logger.error(f"User {task.user_id} not found for task {task.id}")
-                return
+                return None
         
         # Send image to user
         task_type_text = "Картинка создана" if task.task_type == "generate" else "Фото отредактировано"
-        caption = f"✅ {task_type_text}!\n\nПромпт: {task.prompt[:200]}..." if len(task.prompt) > 200 else f"✅ {task_type_text}!\n\nПромпт: {task.prompt}"
-        
+        prompt_preview = task.prompt[:200] + "..." if len(task.prompt) > 200 else task.prompt
+        caption = (
+            f"✅ {task_type_text}!\n\n"
+            f"Промпт: {prompt_preview}\n\n"
+            f"Качество: {task.image_quality}\n"
+            f"Формат: {task.image_size}\n"
+            f"Списано: {task.tokens_spent} 🪙"
+        )
+
+        filename_safe = re.sub(r"[^a-zA-Z0-9_\-]+", "_", f"task_{task.id}")
+
         if is_base64:
-            # Decode base64 and send as file
+            # Decode base64 and send as document
             image_bytes = base64.b64decode(image_data)
-            photo = BufferedInputFile(image_bytes, filename="generated_image.png")
-            await bot.send_photo(
+            document = BufferedInputFile(image_bytes, filename=f"{filename_safe}.png")
+            sent = await bot.send_document(
                 chat_id=telegram_id,
-                photo=photo,
+                document=document,
                 caption=caption,
             )
         else:
-            # Send URL directly
-            await bot.send_photo(
+            # Send URL as document (Telegram will fetch it)
+            sent = await bot.send_document(
                 chat_id=telegram_id,
-                photo=image_data,
+                document=image_data,
                 caption=caption,
             )
+
+        file_id = sent.document.file_id if sent and sent.document else None
         
         logger.info(f"Result sent to user {telegram_id} for task {task.id}")
         
         await bot.session.close()
+
+        return file_id
     
     except Exception as e:
         logger.error(f"Failed to send result to user: {e}")
+        return None
 
 
 async def _send_failure_notification(task: GenerationTask, error_msg: str) -> None:

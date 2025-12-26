@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.db.models import User, GenerationTask
 from bot.db.repositories import UserRepository, TaskRepository
 from bot.services.balance import BalanceService, InsufficientBalanceError
+from bot.config import config
+from bot.services.image_tokens import estimate_image_tokens
 from bot.templates.prompts import (
     TEMPLATES,
     PromptTemplate,
@@ -36,7 +38,7 @@ class TestBalanceService:
         user, _ = await user_repo.get_or_create(telegram_id=100100101)
         
         balance_service = BalanceService(test_session)
-        has_balance = await balance_service.check_balance(user.id, 100)
+        has_balance = await balance_service.check_balance(user.id, user.tokens + 1)
         
         assert has_balance is False
 
@@ -61,10 +63,10 @@ class TestBalanceService:
         balance_service = BalanceService(test_session)
         
         with pytest.raises(InsufficientBalanceError) as exc_info:
-            await balance_service.deduct_tokens(user.id, 100)
+            await balance_service.deduct_tokens(user.id, user.tokens + 1)
         
-        assert exc_info.value.required == 100
-        assert exc_info.value.available == 10
+        assert exc_info.value.required == user.tokens + 1
+        assert exc_info.value.available == user.tokens
 
     @pytest.mark.asyncio
     async def test_refund_tokens(self, test_session: AsyncSession):
@@ -100,8 +102,11 @@ class TestBalanceService:
         
         # Refund the task
         updated_user = await balance_service.refund_task(task.id)
+
+        default_image_tokens = estimate_image_tokens("medium", "1024x1024")
+        expected_initial_tokens = config.initial_tokens * default_image_tokens
         
-        assert updated_user.tokens == 10  # Back to initial
+        assert updated_user.tokens == expected_initial_tokens
 
 
 class TestPromptTemplates:

@@ -25,6 +25,12 @@ class User(Base):
     selected_model: Mapped[str] = mapped_column(
         String(50), default="gpt-image-1", nullable=False
     )
+    image_quality: Mapped[str] = mapped_column(
+        String(10), default="medium", nullable=False
+    )
+    image_size: Mapped[str] = mapped_column(
+        String(20), default="1024x1024", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -50,12 +56,24 @@ class GenerationTask(Base):
     task_type: Mapped[str] = mapped_column(
         String(20), nullable=False
     )  # "generate" | "edit"
+    model: Mapped[str] = mapped_column(
+        String(50), default="gpt-image-1", nullable=False
+    )
+    image_quality: Mapped[str] = mapped_column(
+        String(10), default="medium", nullable=False
+    )
+    image_size: Mapped[str] = mapped_column(
+        String(20), default="1024x1024", nullable=False
+    )
     prompt: Mapped[str] = mapped_column(String(2000), nullable=False)
     source_image_url: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True
     )
     result_image_url: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True
+    )
+    result_file_id: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
     )
     status: Mapped[str] = mapped_column(
         String(20), default="pending", nullable=False

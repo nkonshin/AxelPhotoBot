@@ -6,6 +6,12 @@ from bot.services.image_provider import (
     ImageProvider,
     OpenAIImageProvider,
 )
+from bot.services.image_tokens import (
+    ImageParams,
+    ImageQuality,
+    ImageSize,
+    estimate_image_tokens,
+)
 
 __all__ = [
     "BalanceService",
@@ -13,4 +19,8 @@ __all__ = [
     "GenerationResult",
     "ImageProvider",
     "OpenAIImageProvider",
+    "ImageParams",
+    "ImageQuality",
+    "ImageSize",
+    "estimate_image_tokens",
 ]

@@ -4,15 +4,14 @@ import logging
 from datetime import datetime
 
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository, TaskRepository
 from bot.keyboards.inline import (
     CallbackData,
-    back_keyboard,
     main_menu_keyboard,
-    history_item_keyboard,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,7 +79,9 @@ async def show_profile(callback: CallbackQuery) -> None:
         f"<b>Баланс:</b> {user.tokens} 🪙\n"
         f"<b>Всего генераций:</b> {total_generations}\n"
         f"<b>Успешных:</b> {successful_generations}\n"
-        f"<b>Модель:</b> {user.selected_model}\n\n"
+        f"<b>Модель:</b> {user.selected_model}\n"
+        f"<b>Качество:</b> {user.image_quality}\n"
+        f"<b>Формат:</b> {user.image_size}\n\n"
     )
     
     if history:
@@ -103,11 +104,31 @@ async def show_profile(callback: CallbackQuery) -> None:
             "<i>У вас пока нет генераций.</i>\n\n"
             "Создайте первое изображение в разделе «Создать картинку»!"
         )
-    
-    await callback.message.edit_text(
-        text=text,
-        reply_markup=back_keyboard(),
+
+    builder = InlineKeyboardBuilder()
+    if history:
+        for i, task in enumerate(history[:10], 1):
+            if task.status != "done":
+                continue
+            if not (task.result_file_id or task.result_image_url):
+                continue
+
+            task_type = format_task_type(task.task_type)
+            builder.row(
+                InlineKeyboardButton(
+                    text=f"🖼 {i}. {task_type}",
+                    callback_data=f"history:show:{task.id}",
+                )
+            )
+
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад в меню",
+            callback_data=CallbackData.BACK_TO_MENU,
+        )
     )
+
+    await callback.message.edit_text(text=text, reply_markup=builder.as_markup())
     await callback.answer()
 
 
@@ -131,20 +152,34 @@ async def show_history_image(callback: CallbackQuery) -> None:
             await callback.answer("❌ Задача не найдена")
             return
         
-        if task.status != "done" or not task.result_image_url:
+        if task.status != "done":
             await callback.answer("❌ Изображение недоступно")
             return
     
     # Send the image
     try:
-        await callback.message.answer_photo(
-            photo=task.result_image_url,
-            caption=(
-                f"🖼 <b>Результат генерации</b>\n\n"
-                f"<b>Промпт:</b> <i>{task.prompt[:200]}{'...' if len(task.prompt) > 200 else ''}</i>\n"
-                f"<b>Дата:</b> {format_date(task.created_at)}"
-            ),
+        caption = (
+            f"🖼 <b>Результат</b>\n\n"
+            f"<b>Промпт:</b> <i>{task.prompt[:200]}{'...' if len(task.prompt) > 200 else ''}</i>\n"
+            f"<b>Качество:</b> {task.image_quality}\n"
+            f"<b>Формат:</b> {task.image_size}\n"
+            f"<b>Дата:</b> {format_date(task.created_at)}"
         )
+
+        if task.result_file_id:
+            await callback.message.answer_document(
+                document=task.result_file_id,
+                caption=caption,
+            )
+        elif task.result_image_url:
+            await callback.message.answer_document(
+                document=task.result_image_url,
+                caption=caption,
+            )
+        else:
+            await callback.answer("❌ Изображение недоступно")
+            return
+
         await callback.answer()
     except Exception as e:
         logger.error(f"Failed to send history image: {e}")

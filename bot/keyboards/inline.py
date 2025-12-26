@@ -4,6 +4,12 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.templates.prompts import get_all_templates
+from bot.services.image_tokens import (
+    IMAGE_QUALITY_LABELS,
+    IMAGE_SIZE_LABELS,
+    ImageQuality,
+    ImageSize,
+)
 
 
 # Callback data prefixes
@@ -21,6 +27,7 @@ class CallbackData:
     
     # Confirmation actions
     CONFIRM = "confirm:yes"
+    EXPENSIVE_CONFIRM = "confirm:expensive"
     CANCEL = "confirm:no"
     
     # Navigation
@@ -28,6 +35,10 @@ class CallbackData:
     
     # Template prefix
     TEMPLATE_PREFIX = "template:"
+
+    # Image settings
+    IMAGE_QUALITY_PREFIX = "img:quality:"
+    IMAGE_SIZE_PREFIX = "img:size:"
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -75,6 +86,54 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def image_settings_confirm_keyboard(
+    current_quality: ImageQuality,
+    current_size: ImageSize,
+    confirm_callback_data: str = CallbackData.CONFIRM,
+) -> InlineKeyboardMarkup:
+    """Create keyboard to select image quality/size and confirm/cancel."""
+
+    builder = InlineKeyboardBuilder()
+
+    # Quality row
+    for quality in ("low", "medium", "high"):
+        label = IMAGE_QUALITY_LABELS[quality]
+        text = f"✅ {label}" if quality == current_quality else label
+        builder.add(
+            InlineKeyboardButton(
+                text=text,
+                callback_data=f"{CallbackData.IMAGE_QUALITY_PREFIX}{quality}",
+            )
+        )
+    builder.adjust(3)
+
+    # Size row
+    for size in ("1024x1024", "1024x1536", "1536x1024"):
+        label = IMAGE_SIZE_LABELS[size]
+        text = f"✅ {label}" if size == current_size else label
+        builder.add(
+            InlineKeyboardButton(
+                text=text,
+                callback_data=f"{CallbackData.IMAGE_SIZE_PREFIX}{size}",
+            )
+        )
+    builder.adjust(3, 3)
+
+    # Confirm row
+    builder.row(
+        InlineKeyboardButton(
+            text="✅ Подтвердить",
+            callback_data=confirm_callback_data,
+        ),
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data=CallbackData.CANCEL,
+        ),
+    )
+
+    return builder.as_markup()
+
+
 def templates_keyboard() -> InlineKeyboardMarkup:
     """
     Create keyboard with template options.
@@ -87,7 +146,7 @@ def templates_keyboard() -> InlineKeyboardMarkup:
     for template in templates:
         builder.row(
             InlineKeyboardButton(
-                text=f"{template.name} ({template.tokens_cost} 🪙)",
+                text=f"{template.name}",
                 callback_data=f"{CallbackData.TEMPLATE_PREFIX}{template.id}",
             )
         )

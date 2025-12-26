@@ -25,11 +25,25 @@ class ImageProvider(ABC):
     """Abstract base class for image generation providers."""
     
     @abstractmethod
-    async def generate(self, prompt: str, model: str = None) -> GenerationResult:
+    async def generate(
+        self,
+        prompt: str,
+        model: str = None,
+        quality: str | None = None,
+        size: str | None = None,
+    ) -> GenerationResult:
         pass
     
     @abstractmethod
-    async def edit(self, image_source: str, prompt: str, bot_token: str = None, model: str = None) -> GenerationResult:
+    async def edit(
+        self,
+        image_source: str,
+        prompt: str,
+        bot_token: str = None,
+        model: str = None,
+        quality: str | None = None,
+        size: str | None = None,
+    ) -> GenerationResult:
         pass
 
 
@@ -52,7 +66,13 @@ class OpenAIImageProvider(ImageProvider):
         self.model = model
         self.client = AsyncOpenAI(api_key=api_key)
     
-    async def generate(self, prompt: str, model: str = None) -> GenerationResult:
+    async def generate(
+        self,
+        prompt: str,
+        model: str = None,
+        quality: str | None = None,
+        size: str | None = None,
+    ) -> GenerationResult:
         """
         Generate an image using OpenAI Images API.
         GPT image models always return base64.
@@ -67,7 +87,8 @@ class OpenAIImageProvider(ImageProvider):
                 model=use_model,
                 prompt=prompt,
                 n=1,
-                size="1024x1024",
+                quality=quality or "auto",
+                size=size or "auto",
             )
             
             image_data = response.data[0]
@@ -101,7 +122,15 @@ class OpenAIImageProvider(ImageProvider):
                 error=error_msg,
             )
     
-    async def edit(self, image_source: str, prompt: str, bot_token: str = None, model: str = None) -> GenerationResult:
+    async def edit(
+        self,
+        image_source: str,
+        prompt: str,
+        bot_token: str = None,
+        model: str = None,
+        quality: str | None = None,
+        size: str | None = None,
+    ) -> GenerationResult:
         """
         Edit an image using OpenAI Images API.
         Note: Edit endpoint only supports gpt-image-1 and dall-e-2 (NOT gpt-image-1.5)
@@ -161,7 +190,8 @@ class OpenAIImageProvider(ImageProvider):
                 image=image_file,
                 prompt=prompt,
                 n=1,
-                size="1024x1024",
+                quality=quality or "auto",
+                size=size or "auto",
             )
             
             image_data = response.data[0]

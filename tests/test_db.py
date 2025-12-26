@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import User, GenerationTask, Template
 from bot.db.repositories import UserRepository, TaskRepository
+from bot.config import config
+from bot.services.image_tokens import estimate_image_tokens
 
 
 class TestUserModel:
@@ -72,10 +74,13 @@ class TestUserRepository:
             first_name="New",
         )
 
+        default_image_tokens = estimate_image_tokens("medium", "1024x1024")
+        expected_initial_tokens = config.initial_tokens * default_image_tokens
+
         assert created is True
         assert user.telegram_id == 111222333
         assert user.username == "newuser"
-        assert user.tokens == 10  # Default initial tokens
+        assert user.tokens == expected_initial_tokens
 
     @pytest.mark.asyncio
     async def test_get_or_create_existing_user(self, test_session: AsyncSession):

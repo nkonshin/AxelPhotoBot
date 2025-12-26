@@ -106,14 +106,6 @@ async def menu_model(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data == CallbackData.PROFILE)
-async def menu_profile(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle 'Личный кабинет' button - redirects to profile handler."""
-    # This will be handled by profile.py router
-    # Just answer the callback to prevent timeout
-    await callback.answer()
-
-
 @router.callback_query(F.data == CallbackData.TOKENS)
 async def menu_tokens(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle 'Купить токены' button."""
@@ -133,9 +125,9 @@ async def menu_tokens(callback: CallbackQuery, state: FSMContext) -> None:
             "💰 <b>Купить токены</b>\n\n"
             f"Ваш текущий баланс: <b>{balance}</b> 🪙\n\n"
             "Пакеты токенов:\n"
-            "• 50 токенов — 99 ₽\n"
-            "• 150 токенов — 249 ₽\n"
-            "• 500 токенов — 699 ₽\n\n"
+            "• 50 000 🪙 — 99 ₽\n"
+            "• 150 000 🪙 — 249 ₽\n"
+            "• 500 000 🪙 — 699 ₽\n\n"
             "🔜 <i>Оплата скоро будет доступна</i>"
         ),
         reply_markup=tokens_keyboard(),
