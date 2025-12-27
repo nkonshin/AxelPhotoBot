@@ -145,6 +145,31 @@ MAX_EDIT_IMAGES = 10
 EXTRA_IMAGE_COST_PERCENT = 10
 
 
+def _build_photo_received_text(photos_count: int, max_photos: int = MAX_EDIT_IMAGES) -> str:
+    """Build the text message when photo(s) are received."""
+    header = f"✅ Фото получено! ({photos_count}/{max_photos})" if photos_count == 1 else f"✅ Получено фото: {photos_count}/{max_photos}"
+    
+    extra_cost_info = ""
+    if photos_count > 1:
+        extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
+        extra_cost_info = f"\n💰 <i>Доп. стоимость за {photos_count - 1} фото: +{extra_percent}%</i>\n"
+    
+    return (
+        f"{header}\n\n"
+        "Опишите, что нужно сделать с изображением.\n\n"
+        "💡 <b>Примеры:</b>\n"
+        "• «Сделай портрет в студийном свете»\n"
+        "• «Замени фон на город ночью с неоновыми огнями»\n"
+        "• «Создай атмосферу как в кино: мягкий свет, глубина резкости»\n\n"
+        "💡 <b>Если вы загрузили несколько фото, вы можете:</b>\n"
+        "• «Соедини человека с первого фото с локацией со второго»\n"
+        "• «Собери одно изображение, используя лучшие детали из всех фото»\n"
+        "• «Возьми стиль освещения с одного снимка и примени к другому»\n"
+        f"{extra_cost_info}\n"
+        f"📎 Можете добавить ещё фото (до {max_photos}) или отправьте описание"
+    )
+
+
 def validate_image_format(file_name: str | None, mime_type: str | None) -> bool:
     """
     Validate that the image format is supported.
@@ -176,6 +201,7 @@ async def process_photo(message: Message, state: FSMContext) -> None:
     Process uploaded photo for editing.
     
     Supports multiple photos (up to 10). Each additional photo adds +10% to cost.
+    Handles batch uploads (multiple photos in one message via media_group_id).
     """
     # Get the largest photo size
     photo: PhotoSize = message.photo[-1]
@@ -184,6 +210,7 @@ async def process_photo(message: Message, state: FSMContext) -> None:
     # Get current state data
     data = await state.get_data()
     source_file_ids = data.get("source_file_ids", [])
+    last_media_group_id = data.get("last_media_group_id")
     
     # Check if we've reached the limit
     if len(source_file_ids) >= MAX_EDIT_IMAGES:
@@ -215,32 +242,43 @@ async def process_photo(message: Message, state: FSMContext) -> None:
     
     # Add photo to list
     source_file_ids.append(file_id)
-    await state.update_data(source_file_ids=source_file_ids)
+    
+    # Check if this is part of a media group (batch upload)
+    current_media_group_id = message.media_group_id
+    
+    # Update state
+    await state.update_data(
+        source_file_ids=source_file_ids,
+        last_media_group_id=current_media_group_id,
+    )
     
     # For backward compatibility, also store first image as source_file_id
     if len(source_file_ids) == 1:
         await state.update_data(source_file_id=file_id)
     
-    photos_count = len(source_file_ids)
-    extra_cost_info = ""
-    if photos_count > 1:
-        extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
-        extra_cost_info = f"\n💰 <i>Доп. стоимость за {photos_count - 1} фото: +{extra_percent}%</i>"
-    
     await state.set_state(EditStates.waiting_edit_prompt)
     
+    # Only send message if this is not part of a media group,
+    # or if it's the first photo in a media group
+    # (Telegram sends each photo in media group as separate message)
+    if current_media_group_id and current_media_group_id == last_media_group_id:
+        # This is a subsequent photo in the same media group, don't send message
+        return
+    
+    # Wait a bit for other photos in media group to arrive
+    if current_media_group_id:
+        import asyncio
+        await asyncio.sleep(0.5)
+        # Re-read state to get all photos from media group
+        data = await state.get_data()
+        source_file_ids = data.get("source_file_ids", [])
+    
+    photos_count = len(source_file_ids)
+    
     await message.answer(
-        text=(
-            f"✅ <b>Фото получено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
-            "Теперь опишите, какие изменения вы хотите внести.\n\n"
-            "💡 <i>Примеры:</i>\n"
-            "• «Сделай фон размытым»\n"
-            "• «Добавь закат на заднем плане»\n"
-            "• «Преврати в мультяшный стиль»"
-            f"{extra_cost_info}\n\n"
-            f"📎 <i>Можете добавить ещё фото (до {MAX_EDIT_IMAGES}) или отправьте описание</i>"
-        ),
+        text=_build_photo_received_text(photos_count),
         reply_markup=back_keyboard(),
+        parse_mode="HTML",
     )
 
 
@@ -265,6 +303,7 @@ async def process_document_image(message: Message, state: FSMContext) -> None:
                 "Или отправьте фото напрямую (не как файл)."
             ),
             reply_markup=back_keyboard(),
+            parse_mode="HTML",
         )
         return
     
@@ -311,21 +350,13 @@ async def process_document_image(message: Message, state: FSMContext) -> None:
         await state.update_data(source_file_id=file_id)
     
     photos_count = len(source_file_ids)
-    extra_cost_info = ""
-    if photos_count > 1:
-        extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
-        extra_cost_info = f"\n💰 <i>Доп. стоимость за {photos_count - 1} фото: +{extra_percent}%</i>"
     
     await state.set_state(EditStates.waiting_edit_prompt)
     
     await message.answer(
-        text=(
-            f"✅ <b>Изображение получено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
-            "Теперь опишите, какие изменения вы хотите внести."
-            f"{extra_cost_info}\n\n"
-            f"📎 <i>Можете добавить ещё фото (до {MAX_EDIT_IMAGES}) или отправьте описание</i>"
-        ),
+        text=_build_photo_received_text(photos_count),
         reply_markup=back_keyboard(),
+        parse_mode="HTML",
     )
 
 
@@ -438,6 +469,7 @@ async def process_additional_photo(message: Message, state: FSMContext) -> None:
     
     data = await state.get_data()
     source_file_ids = data.get("source_file_ids", [])
+    last_media_group_id = data.get("last_media_group_id")
     
     if len(source_file_ids) >= MAX_EDIT_IMAGES:
         await message.answer(
@@ -448,18 +480,49 @@ async def process_additional_photo(message: Message, state: FSMContext) -> None:
         return
     
     source_file_ids.append(file_id)
-    await state.update_data(source_file_ids=source_file_ids)
+    
+    # Check if this is part of a media group (batch upload)
+    current_media_group_id = message.media_group_id
+    
+    await state.update_data(
+        source_file_ids=source_file_ids,
+        last_media_group_id=current_media_group_id,
+    )
+    
+    # Only send message if this is not part of a media group,
+    # or if it's the first photo in a media group
+    if current_media_group_id and current_media_group_id == last_media_group_id:
+        return
+    
+    # Wait a bit for other photos in media group to arrive
+    if current_media_group_id:
+        import asyncio
+        await asyncio.sleep(0.5)
+        data = await state.get_data()
+        source_file_ids = data.get("source_file_ids", [])
     
     photos_count = len(source_file_ids)
     extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
     
-    await message.answer(
-        text=(
+    # Use different text for batch vs single photo
+    if current_media_group_id:
+        added_count = photos_count - (len(data.get("source_file_ids", [])) - 1) if data else 1
+        text = (
+            f"✅ <b>Добавлено фото!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+            f"💰 <i>Доп. стоимость: +{extra_percent}%</i>\n\n"
+            "Отправьте описание изменений или добавьте ещё фото."
+        )
+    else:
+        text = (
             f"✅ <b>Фото добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
             f"💰 <i>Доп. стоимость: +{extra_percent}%</i>\n\n"
             "Отправьте описание изменений или добавьте ещё фото."
-        ),
+        )
+    
+    await message.answer(
+        text=text,
         reply_markup=back_keyboard(),
+        parse_mode="HTML",
     )
 
 
@@ -501,6 +564,7 @@ async def process_additional_document(message: Message, state: FSMContext) -> No
             "Отправьте описание изменений или добавьте ещё фото."
         ),
         reply_markup=back_keyboard(),
+        parse_mode="HTML",
     )
 
 

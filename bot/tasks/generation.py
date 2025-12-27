@@ -6,6 +6,7 @@ image generation/editing requests asynchronously.
 
 import asyncio
 import logging
+import traceback
 from typing import Optional
 
 from redis import Redis
@@ -94,6 +95,8 @@ async def _process_generation_task_async(task_id: int) -> bool:
     logger.info(f"Processing generation task {task_id}")
     
     session_maker = get_session_maker()
+    animation_message_id = None
+    telegram_id = None
     
     async with session_maker() as session:
         task_repo = TaskRepository(session)
@@ -105,9 +108,22 @@ async def _process_generation_task_async(task_id: int) -> bool:
             logger.error(f"Task {task_id} not found")
             return False
         
+        # Get user's telegram_id for animation
+        from sqlalchemy import select
+        from bot.db.models import User
+        
+        result = await session.execute(
+            select(User.telegram_id).where(User.id == task.user_id)
+        )
+        telegram_id = result.scalar_one_or_none()
+        
         # Update status to processing
         await task_repo.update_status(task_id, status="processing")
         logger.info(f"Task {task_id} status updated to processing")
+        
+        # Send animation message
+        if telegram_id:
+            animation_message_id = await _send_animation_message(telegram_id)
         
         try:
             # Initialize image provider with task model
@@ -140,6 +156,10 @@ async def _process_generation_task_async(task_id: int) -> bool:
             else:
                 raise ValueError(f"Unknown task type: {task.task_type}")
             
+            # Delete animation message
+            if animation_message_id and telegram_id:
+                await _delete_animation_message(telegram_id, animation_message_id)
+            
             if result.success and (result.image_url or result.image_base64):
                 # Send result to user via Telegram
                 file_id = await _send_result_to_user(
@@ -168,6 +188,10 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 raise GenerationError(error_msg)
         
         except Exception as e:
+            # Delete animation message on error
+            if animation_message_id and telegram_id:
+                await _delete_animation_message(telegram_id, animation_message_id)
+            
             # Handle failure
             error_msg = str(e)
             logger.error(f"Task {task_id} failed with error: {error_msg}")
@@ -209,6 +233,49 @@ async def _process_generation_task_async(task_id: int) -> bool:
                     f"re-queuing..."
                 )
                 raise  # Re-raise for RQ retry mechanism
+
+
+async def _send_animation_message(telegram_id: int) -> Optional[int]:
+    """
+    Send animation message to user while generating.
+    
+    Returns:
+        Message ID of the animation message, or None if failed
+    """
+    try:
+        from aiogram import Bot
+        
+        bot = Bot(token=config.bot_token)
+        
+        message = await bot.send_message(
+            chat_id=telegram_id,
+            text="⏳ Генерирую...",
+        )
+        
+        await bot.session.close()
+        
+        return message.message_id
+    
+    except Exception as e:
+        logger.error(f"Failed to send animation message: {e}")
+        return None
+
+
+async def _delete_animation_message(telegram_id: int, message_id: int) -> None:
+    """
+    Delete the animation message after generation is complete.
+    """
+    try:
+        from aiogram import Bot
+        
+        bot = Bot(token=config.bot_token)
+        
+        await bot.delete_message(chat_id=telegram_id, message_id=message_id)
+        
+        await bot.session.close()
+    
+    except Exception as e:
+        logger.error(f"Failed to delete animation message: {e}")
 
 
 class GenerationError(Exception):
@@ -265,8 +332,8 @@ async def _send_result_to_user(
             f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>"
         )
 
-        # Filename: GPT_Image_{task_id}.png
-        filename = f"GPT_Image_{task.id}.png"
+        # Simple filename without numbering
+        filename = "GPT_Image.png"
 
         if is_base64:
             # Decode base64 and send as document
@@ -276,6 +343,7 @@ async def _send_result_to_user(
                 chat_id=telegram_id,
                 document=document,
                 caption=caption,
+                parse_mode="HTML",
                 reply_markup=regenerate_keyboard(task.id),
             )
         else:
@@ -284,6 +352,7 @@ async def _send_result_to_user(
                 chat_id=telegram_id,
                 document=image_data,
                 caption=caption,
+                parse_mode="HTML",
                 reply_markup=regenerate_keyboard(task.id),
             )
 
@@ -303,6 +372,7 @@ async def _send_result_to_user(
 async def _send_failure_notification(task: GenerationTask, error_msg: str) -> None:
     """
     Send failure notification to user via Telegram.
+    Also notifies admins about the error.
     
     Args:
         task: GenerationTask with user info
@@ -328,7 +398,7 @@ async def _send_failure_notification(task: GenerationTask, error_msg: str) -> No
                 logger.error(f"User {task.user_id} not found for task {task.id}")
                 return
         
-        # Send failure notification
+        # Send failure notification to user
         message = (
             f"❌ К сожалению, генерация не удалась.\n\n"
             f"Токены ({task.tokens_spent}) возвращены на ваш баланс.\n\n"
@@ -339,7 +409,70 @@ async def _send_failure_notification(task: GenerationTask, error_msg: str) -> No
         
         logger.info(f"Failure notification sent to user {telegram_id} for task {task.id}")
         
+        # Notify admins about the error
+        await _notify_admins_about_error(bot, task, error_msg)
+        
         await bot.session.close()
     
     except Exception as e:
         logger.error(f"Failed to send failure notification: {e}")
+
+
+async def _notify_admins_about_error(bot, task: GenerationTask, error_msg: str) -> None:
+    """
+    Send error notification to all admins.
+    
+    Args:
+        bot: Telegram Bot instance
+        task: GenerationTask that failed
+        error_msg: Error message
+    """
+    if not config.admin_ids:
+        logger.warning("No admin IDs configured, skipping admin notification")
+        return
+    
+    try:
+        # Get user info for context
+        session_maker = get_session_maker()
+        async with session_maker() as session:
+            from sqlalchemy import select
+            from bot.db.models import User
+            
+            result = await session.execute(
+                select(User.telegram_id, User.username).where(User.id == task.user_id)
+            )
+            user_data = result.first()
+            user_telegram_id = user_data[0] if user_data else "Unknown"
+            username = user_data[1] if user_data else "Unknown"
+        
+        # Build admin notification
+        prompt_preview = task.prompt[:200] + "..." if len(task.prompt) > 200 else task.prompt
+        error_preview = error_msg[:500] + "..." if len(error_msg) > 500 else error_msg
+        
+        admin_message = (
+            f"🚨 <b>Ошибка генерации!</b>\n\n"
+            f"<b>Task ID:</b> {task.id}\n"
+            f"<b>User ID:</b> {task.user_id}\n"
+            f"<b>Telegram ID:</b> {user_telegram_id}\n"
+            f"<b>Username:</b> @{username if username else 'N/A'}\n"
+            f"<b>Тип:</b> {task.task_type}\n"
+            f"<b>Модель:</b> {task.model}\n"
+            f"<b>Токены:</b> {task.tokens_spent}\n\n"
+            f"<b>Промпт:</b>\n<code>{prompt_preview}</code>\n\n"
+            f"<b>Ошибка:</b>\n<code>{error_preview}</code>"
+        )
+        
+        # Send to all admins
+        for admin_id in config.admin_ids:
+            try:
+                await bot.send_message(
+                    chat_id=admin_id,
+                    text=admin_message,
+                    parse_mode="HTML",
+                )
+                logger.info(f"Admin {admin_id} notified about task {task.id} failure")
+            except Exception as e:
+                logger.error(f"Failed to notify admin {admin_id}: {e}")
+    
+    except Exception as e:
+        logger.error(f"Failed to notify admins: {e}")

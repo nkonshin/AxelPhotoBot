@@ -196,14 +196,13 @@ class OpenAIImageProvider(ImageProvider):
             
             logger.info(f"Sending {len(image_files)} image(s) to OpenAI edit endpoint")
             
-            # OpenAI edit endpoint accepts single image or list of images
-            # For now, use the first image (OpenAI API limitation)
-            # Multiple images support may be added in future API versions
-            primary_image = image_files[0]
+            # GPT Image models support up to 16 images for editing
+            # Pass array of images if multiple, single image otherwise
+            image_param = image_files if len(image_files) > 1 else image_files[0]
             
             response = await self.client.images.edit(
                 model=use_model,
-                image=primary_image,
+                image=image_param,
                 prompt=prompt,
                 n=1,
                 quality=quality or "auto",
