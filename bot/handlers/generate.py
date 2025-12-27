@@ -326,7 +326,6 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
     await callback.message.edit_text(
         text=(
             "✅ <b>Задача создана!</b>\n\n"
-            f"🆔 ID задачи: <code>{task.id}</code>\n\n"
             "⏳ Ваше изображение генерируется...\n"
             "Я отправлю результат, когда будет готово.\n\n"
             "Это может занять 10-30 секунд."
@@ -409,7 +408,6 @@ async def confirm_generation_expensive(callback: CallbackQuery, state: FSMContex
     await callback.message.edit_text(
         text=(
             "✅ <b>Задача создана!</b>\n\n"
-            f"🆔 ID задачи: <code>{task.id}</code>\n\n"
             "⏳ Ваше изображение генерируется...\n"
             "Я отправлю результат, когда будет готово.\n\n"
             "Это может занять 10-30 секунд."

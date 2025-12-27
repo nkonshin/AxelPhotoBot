@@ -31,6 +31,9 @@ class User(Base):
     image_size: Mapped[str] = mapped_column(
         String(20), default="1024x1024", nullable=False
     )
+    referrer_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -41,6 +44,12 @@ class User(Base):
     # Relationships
     tasks: Mapped[List["GenerationTask"]] = relationship(
         "GenerationTask", back_populates="user", lazy="selectin"
+    )
+    referrer: Mapped[Optional["User"]] = relationship(
+        "User", remote_side=[id], foreign_keys=[referrer_id], lazy="selectin"
+    )
+    referrals: Mapped[List["User"]] = relationship(
+        "User", back_populates="referrer", foreign_keys="User.referrer_id", lazy="selectin"
     )
 
 

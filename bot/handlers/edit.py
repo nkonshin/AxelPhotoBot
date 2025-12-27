@@ -24,6 +24,94 @@ logger = logging.getLogger(__name__)
 router = Router(name="edit")
 
 
+# ============== Reply-to-Edit Handler ==============
+# This handler catches when user replies to a generated image with text
+
+@router.message(F.reply_to_message.document, F.text)
+async def handle_reply_to_edit(message: Message, state: FSMContext) -> None:
+    """
+    Handle reply to a generated image with edit prompt.
+    
+    When user replies to a bot's document (generated image) with text,
+    start the edit flow with that image and prompt.
+    """
+    reply_msg = message.reply_to_message
+    
+    # Check if the replied message is from the bot and has a document
+    if not reply_msg or not reply_msg.document:
+        return
+    
+    # Check if it's a reply to bot's message (bot's messages have from_user as bot)
+    if not reply_msg.from_user or not reply_msg.from_user.is_bot:
+        return
+    
+    prompt = message.text.strip()
+    
+    if not prompt:
+        await message.answer(
+            "❌ Пожалуйста, напишите описание изменений.",
+            reply_markup=back_keyboard(),
+        )
+        return
+    
+    if len(prompt) > 2000:
+        await message.answer(
+            "❌ Описание слишком длинное. Максимум 2000 символов.",
+            reply_markup=back_keyboard(),
+        )
+        return
+    
+    # Get file_id from the replied document
+    file_id = reply_msg.document.file_id
+    
+    # Get user info
+    user_tg = message.from_user
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_telegram_id(user_tg.id)
+        
+        if user is None:
+            await message.answer(
+                "❌ Пользователь не найден. Используйте /start",
+                reply_markup=back_keyboard(),
+            )
+            return
+        
+        balance = user.tokens
+        quality = user.image_quality
+        size = user.image_size
+        model = user.selected_model
+    
+    cost = estimate_image_tokens(quality, size)
+    
+    # Save to state
+    await state.update_data(
+        source_file_id=file_id,
+        user_id=user.id,
+        prompt=prompt,
+        image_quality=quality,
+        image_size=size,
+        model=model,
+        expensive_confirmed=False,
+    )
+    await state.set_state(EditStates.confirm_edit)
+    
+    # Show confirmation
+    await message.answer(
+        text=_build_confirmation_text(
+            prompt=prompt,
+            balance=balance,
+            cost=cost,
+            quality=quality,
+            size=size,
+            model=model,
+        ),
+        reply_markup=image_settings_confirm_keyboard(quality, size),
+    )
+
+
 def _build_confirmation_text(
     prompt: str,
     balance: int,
@@ -50,6 +138,11 @@ def _build_confirmation_text(
 # Supported image formats
 SUPPORTED_FORMATS = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+# Maximum number of images for edit
+MAX_EDIT_IMAGES = 10
+# Extra cost per additional image (10%)
+EXTRA_IMAGE_COST_PERCENT = 10
 
 
 def validate_image_format(file_name: str | None, mime_type: str | None) -> bool:
@@ -82,43 +175,70 @@ async def process_photo(message: Message, state: FSMContext) -> None:
     """
     Process uploaded photo for editing.
     
-    Saves file_id and asks for edit description.
+    Supports multiple photos (up to 10). Each additional photo adds +10% to cost.
     """
     # Get the largest photo size
     photo: PhotoSize = message.photo[-1]
     file_id = photo.file_id
     
-    # Get user info
-    user_tg = message.from_user
-    session_maker = get_session_maker()
+    # Get current state data
+    data = await state.get_data()
+    source_file_ids = data.get("source_file_ids", [])
     
-    async with session_maker() as session:
-        user_repo = UserRepository(session)
-        user = await user_repo.get_by_telegram_id(user_tg.id)
+    # Check if we've reached the limit
+    if len(source_file_ids) >= MAX_EDIT_IMAGES:
+        await message.answer(
+            f"❌ Максимум {MAX_EDIT_IMAGES} изображений.\n\n"
+            "Отправьте описание изменений или нажмите «Готово».",
+            reply_markup=back_keyboard(),
+        )
+        return
+    
+    # Get user info (only on first photo)
+    if not source_file_ids:
+        user_tg = message.from_user
+        session_maker = get_session_maker()
         
-        if user is None:
-            await message.answer(
-                "❌ Пользователь не найден. Используйте /start",
-                reply_markup=back_keyboard(),
-            )
-            await state.clear()
-            return
+        async with session_maker() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_by_telegram_id(user_tg.id)
+            
+            if user is None:
+                await message.answer(
+                    "❌ Пользователь не найден. Используйте /start",
+                    reply_markup=back_keyboard(),
+                )
+                await state.clear()
+                return
+        
+        await state.update_data(user_id=user.id)
     
-    # Save photo file_id to state
-    await state.update_data(
-        source_file_id=file_id,
-        user_id=user.id,
-    )
+    # Add photo to list
+    source_file_ids.append(file_id)
+    await state.update_data(source_file_ids=source_file_ids)
+    
+    # For backward compatibility, also store first image as source_file_id
+    if len(source_file_ids) == 1:
+        await state.update_data(source_file_id=file_id)
+    
+    photos_count = len(source_file_ids)
+    extra_cost_info = ""
+    if photos_count > 1:
+        extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
+        extra_cost_info = f"\n💰 <i>Доп. стоимость за {photos_count - 1} фото: +{extra_percent}%</i>"
+    
     await state.set_state(EditStates.waiting_edit_prompt)
     
     await message.answer(
         text=(
-            "✅ <b>Фото получено!</b>\n\n"
+            f"✅ <b>Фото получено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
             "Теперь опишите, какие изменения вы хотите внести.\n\n"
             "💡 <i>Примеры:</i>\n"
             "• «Сделай фон размытым»\n"
             "• «Добавь закат на заднем плане»\n"
             "• «Преврати в мультяшный стиль»"
+            f"{extra_cost_info}\n\n"
+            f"📎 <i>Можете добавить ещё фото (до {MAX_EDIT_IMAGES}) или отправьте описание</i>"
         ),
         reply_markup=back_keyboard(),
     )
@@ -129,7 +249,7 @@ async def process_document_image(message: Message, state: FSMContext) -> None:
     """
     Process uploaded document (image file) for editing.
     
-    Validates format and saves file_id.
+    Validates format and saves file_id. Supports multiple images.
     """
     document = message.document
     
@@ -150,33 +270,60 @@ async def process_document_image(message: Message, state: FSMContext) -> None:
     
     file_id = document.file_id
     
-    # Get user info
-    user_tg = message.from_user
-    session_maker = get_session_maker()
+    # Get current state data
+    data = await state.get_data()
+    source_file_ids = data.get("source_file_ids", [])
     
-    async with session_maker() as session:
-        user_repo = UserRepository(session)
-        user = await user_repo.get_by_telegram_id(user_tg.id)
+    # Check if we've reached the limit
+    if len(source_file_ids) >= MAX_EDIT_IMAGES:
+        await message.answer(
+            f"❌ Максимум {MAX_EDIT_IMAGES} изображений.\n\n"
+            "Отправьте описание изменений.",
+            reply_markup=back_keyboard(),
+        )
+        return
+    
+    # Get user info (only on first image)
+    if not source_file_ids:
+        user_tg = message.from_user
+        session_maker = get_session_maker()
         
-        if user is None:
-            await message.answer(
-                "❌ Пользователь не найден. Используйте /start",
-                reply_markup=back_keyboard(),
-            )
-            await state.clear()
-            return
+        async with session_maker() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_by_telegram_id(user_tg.id)
+            
+            if user is None:
+                await message.answer(
+                    "❌ Пользователь не найден. Используйте /start",
+                    reply_markup=back_keyboard(),
+                )
+                await state.clear()
+                return
+        
+        await state.update_data(user_id=user.id)
     
-    # Save file_id to state
-    await state.update_data(
-        source_file_id=file_id,
-        user_id=user.id,
-    )
+    # Add file to list
+    source_file_ids.append(file_id)
+    await state.update_data(source_file_ids=source_file_ids)
+    
+    # For backward compatibility
+    if len(source_file_ids) == 1:
+        await state.update_data(source_file_id=file_id)
+    
+    photos_count = len(source_file_ids)
+    extra_cost_info = ""
+    if photos_count > 1:
+        extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
+        extra_cost_info = f"\n💰 <i>Доп. стоимость за {photos_count - 1} фото: +{extra_percent}%</i>"
+    
     await state.set_state(EditStates.waiting_edit_prompt)
     
     await message.answer(
         text=(
-            "✅ <b>Изображение получено!</b>\n\n"
+            f"✅ <b>Изображение получено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
             "Теперь опишите, какие изменения вы хотите внести."
+            f"{extra_cost_info}\n\n"
+            f"📎 <i>Можете добавить ещё фото (до {MAX_EDIT_IMAGES}) или отправьте описание</i>"
         ),
         reply_markup=back_keyboard(),
     )
@@ -220,6 +367,13 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
     # Get user balance
     data = await state.get_data()
     user_id = data.get("user_id")
+    source_file_ids = data.get("source_file_ids", [])
+    
+    # Fallback to single file_id for backward compatibility
+    if not source_file_ids:
+        source_file_id = data.get("source_file_id")
+        if source_file_id:
+            source_file_ids = [source_file_id]
     
     session_maker = get_session_maker()
     
@@ -239,7 +393,11 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
         size = user.image_size
         model = user.selected_model
 
-    cost = estimate_image_tokens(quality, size)
+    # Calculate cost with extra for multiple images
+    base_cost = estimate_image_tokens(quality, size)
+    extra_images = max(0, len(source_file_ids) - 1)
+    extra_cost = int(base_cost * extra_images * EXTRA_IMAGE_COST_PERCENT / 100)
+    cost = base_cost + extra_cost
 
     # Save prompt to state
     await state.update_data(
@@ -248,8 +406,15 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
         image_size=size,
         model=model,
         expensive_confirmed=False,
+        source_file_ids=source_file_ids,
+        images_count=len(source_file_ids),
     )
     await state.set_state(EditStates.confirm_edit)
+    
+    # Build confirmation text with multi-image info
+    images_info = ""
+    if len(source_file_ids) > 1:
+        images_info = f"\n<b>Изображений:</b> {len(source_file_ids)} (+{extra_images * EXTRA_IMAGE_COST_PERCENT}% к стоимости)"
     
     # Show confirmation
     await message.answer(
@@ -260,8 +425,82 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
             quality=quality,
             size=size,
             model=model,
-        ),
+        ) + images_info,
         reply_markup=image_settings_confirm_keyboard(quality, size),
+    )
+
+
+@router.message(EditStates.waiting_edit_prompt, F.photo)
+async def process_additional_photo(message: Message, state: FSMContext) -> None:
+    """Handle additional photo uploads while waiting for prompt."""
+    photo: PhotoSize = message.photo[-1]
+    file_id = photo.file_id
+    
+    data = await state.get_data()
+    source_file_ids = data.get("source_file_ids", [])
+    
+    if len(source_file_ids) >= MAX_EDIT_IMAGES:
+        await message.answer(
+            f"❌ Максимум {MAX_EDIT_IMAGES} изображений.\n\n"
+            "Отправьте описание изменений.",
+            reply_markup=back_keyboard(),
+        )
+        return
+    
+    source_file_ids.append(file_id)
+    await state.update_data(source_file_ids=source_file_ids)
+    
+    photos_count = len(source_file_ids)
+    extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
+    
+    await message.answer(
+        text=(
+            f"✅ <b>Фото добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+            f"💰 <i>Доп. стоимость: +{extra_percent}%</i>\n\n"
+            "Отправьте описание изменений или добавьте ещё фото."
+        ),
+        reply_markup=back_keyboard(),
+    )
+
+
+@router.message(EditStates.waiting_edit_prompt, F.document)
+async def process_additional_document(message: Message, state: FSMContext) -> None:
+    """Handle additional document uploads while waiting for prompt."""
+    document = message.document
+    
+    if not validate_image_format(document.file_name, document.mime_type):
+        await message.answer(
+            "❌ Неподдерживаемый формат. Используйте JPG, PNG или WEBP.",
+            reply_markup=back_keyboard(),
+        )
+        return
+    
+    file_id = document.file_id
+    
+    data = await state.get_data()
+    source_file_ids = data.get("source_file_ids", [])
+    
+    if len(source_file_ids) >= MAX_EDIT_IMAGES:
+        await message.answer(
+            f"❌ Максимум {MAX_EDIT_IMAGES} изображений.\n\n"
+            "Отправьте описание изменений.",
+            reply_markup=back_keyboard(),
+        )
+        return
+    
+    source_file_ids.append(file_id)
+    await state.update_data(source_file_ids=source_file_ids)
+    
+    photos_count = len(source_file_ids)
+    extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
+    
+    await message.answer(
+        text=(
+            f"✅ <b>Изображение добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+            f"💰 <i>Доп. стоимость: +{extra_percent}%</i>\n\n"
+            "Отправьте описание изменений или добавьте ещё фото."
+        ),
+        reply_markup=back_keyboard(),
     )
 
 
@@ -361,9 +600,9 @@ async def set_edit_size(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(EditStates.waiting_edit_prompt)
 async def invalid_edit_prompt_input(message: Message) -> None:
-    """Handle non-text input when waiting for edit prompt."""
+    """Handle invalid input when waiting for edit prompt."""
     await message.answer(
-        "❌ Пожалуйста, отправьте текстовое описание изменений.",
+        "❌ Пожалуйста, отправьте текстовое описание изменений или добавьте ещё фото.",
         reply_markup=back_keyboard(),
     )
 
@@ -381,10 +620,15 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
     prompt = data.get("prompt")
     user_id = data.get("user_id")
     source_file_id = data.get("source_file_id")
+    source_file_ids = data.get("source_file_ids", [])
     quality = data.get("image_quality")
     size = data.get("image_size")
     model = data.get("model")
     expensive_confirmed = data.get("expensive_confirmed", False)
+    
+    # Use first image for the task (OpenAI edit supports one image)
+    if not source_file_id and source_file_ids:
+        source_file_id = source_file_ids[0]
     
     if not prompt or not user_id or not source_file_id or not quality or not size or not model:
         await callback.message.edit_text(
@@ -395,7 +639,11 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
 
-    cost = estimate_image_tokens(quality, size)
+    # Calculate cost with extra for multiple images
+    base_cost = estimate_image_tokens(quality, size)
+    extra_images = max(0, len(source_file_ids) - 1) if source_file_ids else 0
+    extra_cost = int(base_cost * extra_images * EXTRA_IMAGE_COST_PERCENT / 100)
+    cost = base_cost + extra_cost
 
     if cost >= config.high_cost_threshold and not expensive_confirmed:
         session_maker = get_session_maker()
@@ -434,7 +682,12 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
             # Deduct tokens
             await balance_service.deduct_tokens(user_id, cost)
             
-            # Create task with source image
+            # Create task with source image (store all file_ids as JSON if multiple)
+            source_data = source_file_id
+            if source_file_ids and len(source_file_ids) > 1:
+                import json
+                source_data = json.dumps(source_file_ids)
+            
             task = await task_repo.create(
                 user_id=user_id,
                 task_type="edit",
@@ -443,7 +696,7 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
                 model=model,
                 image_quality=quality,
                 image_size=size,
-                source_image_url=source_file_id,  # Store file_id as source
+                source_image_url=source_data,
             )
             
             logger.info(f"Created edit task {task.id} for user {user_id}")
@@ -475,7 +728,6 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_text(
         text=(
             "✅ <b>Задача создана!</b>\n\n"
-            f"🆔 ID задачи: <code>{task.id}</code>\n\n"
             "⏳ Ваше изображение редактируется...\n"
             "Я отправлю результат, когда будет готово.\n\n"
             "Это может занять 10-30 секунд."
@@ -496,9 +748,14 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
     prompt = data.get("prompt")
     user_id = data.get("user_id")
     source_file_id = data.get("source_file_id")
+    source_file_ids = data.get("source_file_ids", [])
     quality = data.get("image_quality")
     size = data.get("image_size")
     model = data.get("model")
+
+    # Use first image for the task
+    if not source_file_id and source_file_ids:
+        source_file_id = source_file_ids[0]
 
     if not prompt or not user_id or not source_file_id or not quality or not size or not model:
         await callback.message.edit_text(
@@ -509,7 +766,11 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
         await callback.answer()
         return
 
-    cost = estimate_image_tokens(quality, size)
+    # Calculate cost with extra for multiple images
+    base_cost = estimate_image_tokens(quality, size)
+    extra_images = max(0, len(source_file_ids) - 1) if source_file_ids else 0
+    extra_cost = int(base_cost * extra_images * EXTRA_IMAGE_COST_PERCENT / 100)
+    cost = base_cost + extra_cost
 
     session_maker = get_session_maker()
     async with session_maker() as session:
@@ -519,6 +780,12 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
         try:
             await balance_service.deduct_tokens(user_id, cost)
 
+            # Store all file_ids as JSON if multiple
+            source_data = source_file_id
+            if source_file_ids and len(source_file_ids) > 1:
+                import json
+                source_data = json.dumps(source_file_ids)
+
             task = await task_repo.create(
                 user_id=user_id,
                 task_type="edit",
@@ -527,7 +794,7 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
                 model=model,
                 image_quality=quality,
                 image_size=size,
-                source_image_url=source_file_id,
+                source_image_url=source_data,
             )
 
             logger.info(f"Created edit task {task.id} for user {user_id}")
@@ -557,7 +824,6 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
     await callback.message.edit_text(
         text=(
             "✅ <b>Задача создана!</b>\n\n"
-            f"🆔 ID задачи: <code>{task.id}</code>\n\n"
             "⏳ Ваше изображение редактируется...\n"
             "Я отправлю результат, когда будет готово.\n\n"
             "Это может занять 10-30 секунд."

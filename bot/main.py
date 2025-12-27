@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI):
     Startup:
     - Initialize database
     - Register handlers
+    - Set bot commands menu
     - Set Telegram webhook
     
     Shutdown:
@@ -59,6 +60,22 @@ async def lifespan(app: FastAPI):
     # Register all handlers
     register_all_handlers(dp)
     logger.info("Handlers registered")
+    
+    # Set bot commands menu
+    try:
+        from aiogram.types import BotCommand
+        
+        commands = [
+            BotCommand(command="start", description="🚀 Запустить бота"),
+            BotCommand(command="balance", description="💰 Проверить баланс"),
+            BotCommand(command="guide", description="📖 Руководство"),
+            BotCommand(command="support", description="🆘 Поддержка"),
+            BotCommand(command="invite", description="👥 Пригласить друга"),
+        ]
+        await bot.set_my_commands(commands)
+        logger.info("Bot commands menu set")
+    except Exception as e:
+        logger.error(f"Failed to set bot commands: {e}")
     
     # Set webhook
     if config.disable_webhook:

@@ -232,8 +232,8 @@ async def _send_result_to_user(
     try:
         from aiogram import Bot
         from aiogram.types import BufferedInputFile
+        from bot.keyboards.inline import regenerate_keyboard
         import base64
-        import re
         
         bot = Bot(token=config.bot_token)
         
@@ -253,26 +253,30 @@ async def _send_result_to_user(
                 return None
         
         # Send image to user
+        task_type_emoji = "🎨" if task.task_type == "generate" else "✏️"
         task_type_text = "Картинка создана" if task.task_type == "generate" else "Фото отредактировано"
-        prompt_preview = task.prompt[:200] + "..." if len(task.prompt) > 200 else task.prompt
+        prompt_preview = task.prompt[:300] + "..." if len(task.prompt) > 300 else task.prompt
+        
         caption = (
-            f"✅ {task_type_text}!\n\n"
-            f"Промпт: {prompt_preview}\n\n"
-            f"Качество: {task.image_quality}\n"
-            f"Формат: {task.image_size}\n"
-            f"Списано: {task.tokens_spent} 🪙"
+            f"{task_type_emoji} <b>{task_type_text}!</b>\n\n"
+            f"<blockquote>{prompt_preview}</blockquote>\n\n"
+            f"⚙️ {task.image_quality} • {task.image_size}\n"
+            f"💰 Списано: {task.tokens_spent} 🪙\n\n"
+            f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>"
         )
 
-        filename_safe = re.sub(r"[^a-zA-Z0-9_\-]+", "_", f"task_{task.id}")
+        # Filename: GPT_Image_{task_id}.png
+        filename = f"GPT_Image_{task.id}.png"
 
         if is_base64:
             # Decode base64 and send as document
             image_bytes = base64.b64decode(image_data)
-            document = BufferedInputFile(image_bytes, filename=f"{filename_safe}.png")
+            document = BufferedInputFile(image_bytes, filename=filename)
             sent = await bot.send_document(
                 chat_id=telegram_id,
                 document=document,
                 caption=caption,
+                reply_markup=regenerate_keyboard(task.id),
             )
         else:
             # Send URL as document (Telegram will fetch it)
@@ -280,6 +284,7 @@ async def _send_result_to_user(
                 chat_id=telegram_id,
                 document=image_data,
                 caption=caption,
+                reply_markup=regenerate_keyboard(task.id),
             )
 
         file_id = sent.document.file_id if sent and sent.document else None

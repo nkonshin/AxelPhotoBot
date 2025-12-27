@@ -39,6 +39,9 @@ class CallbackData:
     # Image settings
     IMAGE_QUALITY_PREFIX = "img:quality:"
     IMAGE_SIZE_PREFIX = "img:size:"
+    
+    # Regenerate
+    REGENERATE_PREFIX = "regen:"
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -294,6 +297,25 @@ def history_item_keyboard(task_id: int, has_image: bool) -> InlineKeyboardMarkup
         InlineKeyboardButton(
             text="◀️ Назад",
             callback_data="history:back",
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def regenerate_keyboard(task_id: int) -> InlineKeyboardMarkup:
+    """
+    Create keyboard with regenerate button for result message.
+    
+    Args:
+        task_id: The task ID to regenerate
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="🔄 Сгенерировать ещё",
+            callback_data=f"{CallbackData.REGENERATE_PREFIX}{task_id}",
         )
     )
     

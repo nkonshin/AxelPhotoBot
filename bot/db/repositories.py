@@ -29,9 +29,16 @@ class UserRepository:
         telegram_id: int,
         username: Optional[str] = None,
         first_name: Optional[str] = None,
+        referrer_id: Optional[int] = None,
     ) -> tuple[User, bool]:
         """
         Get existing user or create a new one.
+        
+        Args:
+            telegram_id: User's Telegram ID
+            username: User's Telegram username
+            first_name: User's first name
+            referrer_id: Database ID of the referrer (if any)
         
         Returns:
             Tuple of (user, created) where created is True if new user was created.
@@ -49,12 +56,34 @@ class UserRepository:
             username=username,
             first_name=first_name,
             tokens=config.initial_tokens * default_image_tokens,
+            referrer_id=referrer_id,
         )
         self.session.add(user)
         await self.session.commit()
         await self.session.refresh(user)
         
         return user, True
+    
+    async def get_referral_stats(self, user_id: int) -> dict:
+        """
+        Get referral statistics for a user.
+        
+        Args:
+            user_id: User's database ID
+        
+        Returns:
+            Dict with referral counts
+        """
+        # Count total referrals
+        result = await self.session.execute(
+            select(func.count(User.id))
+            .where(User.referrer_id == user_id)
+        )
+        total_referrals = result.scalar() or 0
+        
+        return {
+            "total_referrals": total_referrals,
+        }
     
     async def update_tokens(self, user_id: int, tokens_delta: int) -> Optional[User]:
         """

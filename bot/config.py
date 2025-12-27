@@ -69,6 +69,9 @@ class Config:
     admin_ids: List[int] = field(default_factory=list)  # Telegram IDs админов
     admin_api_key: str = ""  # API ключ для HTTP админ-эндпоинтов
 
+    # Support
+    support_username: str = ""  # Username поддержки (например @support)
+
     def is_admin(self, telegram_id: int) -> bool:
         """Check if user is admin."""
         return telegram_id in self.admin_ids
@@ -105,6 +108,9 @@ def load_config() -> Config:
         # Admin settings
         admin_ids=_parse_int_list(os.getenv("ADMIN_IDS", "")),
         admin_api_key=os.getenv("ADMIN_API_KEY", ""),
+
+        # Support
+        support_username=os.getenv("SUPPORT_USERNAME", ""),
     )
 
 

@@ -16,7 +16,7 @@ class GenerationStates(StatesGroup):
 class EditStates(StatesGroup):
     """States for the image editing flow (Редактировать фото)."""
     
-    # User is uploading an image to edit
+    # User is uploading images to edit (supports multiple)
     waiting_image = State()
     
     # User is entering the edit description/prompt

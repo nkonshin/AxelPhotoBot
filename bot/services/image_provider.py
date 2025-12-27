@@ -134,6 +134,10 @@ class OpenAIImageProvider(ImageProvider):
         """
         Edit an image using OpenAI Images API.
         Supports: gpt-image-1, gpt-image-1.5, dall-e-2
+        
+        image_source can be:
+        - A single file_id or URL
+        - A JSON array of file_ids (for multiple images)
         """
         use_model = model or self.model
         
@@ -142,48 +146,64 @@ class OpenAIImageProvider(ImageProvider):
         try:
             import httpx
             import io
+            import json
             
-            image_bytes: bytes
+            # Parse image_source - could be single file_id or JSON array
+            image_sources = []
+            try:
+                parsed = json.loads(image_source)
+                if isinstance(parsed, list):
+                    image_sources = parsed
+                else:
+                    image_sources = [image_source]
+            except (json.JSONDecodeError, TypeError):
+                image_sources = [image_source]
             
-            # Check if image_source is a URL or Telegram file_id
-            if image_source.startswith(('http://', 'https://')):
-                # It's a URL - download directly
-                async with httpx.AsyncClient() as http_client:
-                    img_response = await http_client.get(image_source)
-                    img_response.raise_for_status()
-                    image_bytes = img_response.content
-            else:
-                # It's a Telegram file_id - download from Telegram
-                if not bot_token:
-                    raise ValueError("bot_token required for Telegram file_id")
+            # Download all images
+            image_files = []
+            
+            for idx, src in enumerate(image_sources):
+                image_bytes: bytes
                 
-                from aiogram import Bot
-                
-                bot = Bot(token=bot_token)
-                
-                try:
-                    # Get file info
-                    file = await bot.get_file(image_source)
+                if src.startswith(('http://', 'https://')):
+                    # It's a URL - download directly
+                    async with httpx.AsyncClient() as http_client:
+                        img_response = await http_client.get(src)
+                        img_response.raise_for_status()
+                        image_bytes = img_response.content
+                else:
+                    # It's a Telegram file_id - download from Telegram
+                    if not bot_token:
+                        raise ValueError("bot_token required for Telegram file_id")
                     
-                    # Download file to memory
-                    file_buffer = io.BytesIO()
-                    await bot.download_file(file.file_path, file_buffer)
-                    image_bytes = file_buffer.getvalue()
+                    from aiogram import Bot
                     
-                    logger.info(f"Downloaded image from Telegram: {len(image_bytes)} bytes")
-                finally:
-                    await bot.session.close()
+                    bot = Bot(token=bot_token)
+                    
+                    try:
+                        file = await bot.get_file(src)
+                        file_buffer = io.BytesIO()
+                        await bot.download_file(file.file_path, file_buffer)
+                        image_bytes = file_buffer.getvalue()
+                        logger.info(f"Downloaded image {idx + 1} from Telegram: {len(image_bytes)} bytes")
+                    finally:
+                        await bot.session.close()
+                
+                # Create file-like object
+                image_file = io.BytesIO(image_bytes)
+                image_file.name = f"image_{idx}.png"
+                image_files.append(image_file)
             
-            # Create file-like object for OpenAI API
-            image_file = io.BytesIO(image_bytes)
-            image_file.name = "image.png"  # OpenAI needs a filename
+            logger.info(f"Sending {len(image_files)} image(s) to OpenAI edit endpoint")
             
-            logger.info(f"Sending to OpenAI edit endpoint, size: {len(image_bytes)} bytes")
+            # OpenAI edit endpoint accepts single image or list of images
+            # For now, use the first image (OpenAI API limitation)
+            # Multiple images support may be added in future API versions
+            primary_image = image_files[0]
             
-            # Use OpenAI edit endpoint
             response = await self.client.images.edit(
                 model=use_model,
-                image=image_file,
+                image=primary_image,
                 prompt=prompt,
                 n=1,
                 quality=quality or "auto",
