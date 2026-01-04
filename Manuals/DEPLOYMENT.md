@@ -58,9 +58,24 @@ OPENAI_API_KEY=sk-...
 # Webhook URL (ваш домен с HTTPS)
 WEBHOOK_URL=https://your-domain.com
 
-# Начальный баланс
-INITIAL_TOKENS=10
+# Начальный баланс (7 токенов = 1 High или несколько Medium)
+INITIAL_TOKENS=7
+
+# Админы (ваш Telegram ID, узнать: @userinfobot)
+ADMIN_IDS=123456789
+
+# Поддержка
+SUPPORT_USERNAME=@your_support
+
+# Подписка (опционально)
+SUBSCRIPTION_CHANNEL=@nkonshin_ai
+SUBSCRIPTION_REQUIRED=true
+
+# Видео-приветствие (получите file_id отправив видео-кружок боту как админ)
+WELCOME_VIDEO_FILE_ID=
 ```
+
+**Важно:** После изменения портов в docker-compose.yml нужно выполнить `docker-compose down` перед `up` для пересоздания сети.
 
 ## Шаг 4: Настройка SSL (nginx + certbot)
 
@@ -169,12 +184,17 @@ git pull
 # Пересоберите образы
 docker-compose build --no-cache
 
+# Примените миграции БД (если есть новые)
+docker-compose run --rm app alembic upgrade head
+
 # Запустите сервисы
 docker-compose up -d
 
 # Проверьте логи
 docker-compose logs -f
 ```
+
+**Важно:** Если изменились порты в docker-compose.yml, используйте `docker-compose down` перед `up` для пересоздания сети.
 
 ## Резервное копирование
 
@@ -261,9 +281,11 @@ docker-compose restart worker
 
 1. **Используйте сильные пароли** для PostgreSQL
 2. **Ограничьте доступ** к портам (только 80, 443)
-3. **Регулярно обновляйте** систему и Docker образы
-4. **Настройте firewall** (ufw или iptables)
-5. **Мониторьте логи** на подозрительную активность
+3. **Закройте порты БД** — в docker-compose.yml порты PostgreSQL и Redis привязаны к 127.0.0.1
+4. **Регулярно обновляйте** систему и Docker образы
+5. **Настройте firewall** (ufw или iptables)
+6. **Мониторьте логи** на подозрительную активность
+7. **Защитите админ API** — используйте сильный `ADMIN_API_KEY`
 
 ```bash
 # Настройка firewall
@@ -272,6 +294,22 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
 ```
+
+### Защита от brute-force атак
+
+В `docker-compose.yml` порты БД закрыты от внешнего доступа:
+
+```yaml
+postgres:
+  ports:
+    - "127.0.0.1:5432:5432"  # Только localhost
+
+redis:
+  ports:
+    - "127.0.0.1:6379:6379"  # Только localhost
+```
+
+Это предотвращает внешние атаки на PostgreSQL и Redis. Контейнеры общаются через внутреннюю сеть Docker.
 
 ## Масштабирование
 

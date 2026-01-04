@@ -453,7 +453,7 @@ image=image_param
 
 | Переменная | Описание |
 |------------|----------|
-| `HIGH_COST_THRESHOLD` | Порог для двойного подтверждения (default: 4000) |
+| `HIGH_COST_THRESHOLD` | Порог для двойного подтверждения (default: 20 токенов) |
 | `MAX_TASKS_PER_USER_PER_HOUR` | Rate limiting (default: 20) |
 | `ADMIN_IDS` | Telegram ID админов через запятую |
 | `ADMIN_API_KEY` | API ключ для HTTP админ-эндпоинтов |
