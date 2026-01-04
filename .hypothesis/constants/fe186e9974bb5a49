@@ -1,0 +1,4 @@
+# file: /Users/user/Desktop/Work/PetProjects/NanoBananaTgBot/bot/services/image_provider.py
+# hypothesis_version: 6.148.8
+
+['auto', 'b64_json', 'gpt-image-1', 'gpt-image-1.5', 'http://', 'https://', 'url']

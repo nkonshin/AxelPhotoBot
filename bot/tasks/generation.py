@@ -333,7 +333,7 @@ async def _send_result_to_user(
     try:
         from aiogram import Bot
         from aiogram.types import BufferedInputFile
-        from bot.keyboards.inline import regenerate_keyboard
+        from bot.keyboards.inline import result_feedback_keyboard
         import base64
         
         bot = Bot(token=config.bot_token)
@@ -379,7 +379,7 @@ async def _send_result_to_user(
                 document=document,
                 caption=caption,
                 parse_mode="HTML",
-                reply_markup=regenerate_keyboard(task.id),
+                reply_markup=result_feedback_keyboard(task.id),
             )
         else:
             # Send URL as document (Telegram will fetch it)
@@ -388,7 +388,7 @@ async def _send_result_to_user(
                 document=image_data,
                 caption=caption,
                 parse_mode="HTML",
-                reply_markup=regenerate_keyboard(task.id),
+                reply_markup=result_feedback_keyboard(task.id),
             )
 
         file_id = sent.document.file_id if sent and sent.document else None

@@ -43,6 +43,11 @@ class CallbackData:
     # Regenerate
     REGENERATE_PREFIX = "regen:"
     
+    # Feedback
+    FEEDBACK_POSITIVE_PREFIX = "feedback:positive:"
+    FEEDBACK_NEGATIVE_PREFIX = "feedback:negative:"
+    FEEDBACK_RETRY_PREFIX = "feedback:retry:"
+    
     # Shop packages
     SHOP_STARTER = "shop:starter"
     SHOP_SMALL = "shop:small"
@@ -434,6 +439,68 @@ def subscription_keyboard(channel: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text="✅ Я подписался",
             callback_data="check_subscription",
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def result_feedback_keyboard(task_id: int) -> InlineKeyboardMarkup:
+    """
+    Create keyboard with feedback buttons for generation result.
+    
+    Args:
+        task_id: The task ID for feedback
+    
+    Layout:
+    [👍] [👎]
+    [🔄 Сгенерировать ещё]
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="👍",
+            callback_data=f"{CallbackData.FEEDBACK_POSITIVE_PREFIX}{task_id}",
+        ),
+        InlineKeyboardButton(
+            text="👎",
+            callback_data=f"{CallbackData.FEEDBACK_NEGATIVE_PREFIX}{task_id}",
+        ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="🔄 Сгенерировать ещё",
+            callback_data=f"{CallbackData.REGENERATE_PREFIX}{task_id}",
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def negative_feedback_keyboard(task_id: int) -> InlineKeyboardMarkup:
+    """
+    Create keyboard shown after negative feedback.
+    
+    Args:
+        task_id: The task ID for retry
+    
+    Layout:
+    [🔄 Попробовать снова]
+    [◀️ В меню]
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="🔄 Попробовать снова",
+            callback_data=f"{CallbackData.FEEDBACK_RETRY_PREFIX}{task_id}",
+        ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ В меню",
+            callback_data=CallbackData.BACK_TO_MENU,
         )
     )
     

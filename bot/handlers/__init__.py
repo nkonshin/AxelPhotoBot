@@ -16,6 +16,7 @@ from bot.handlers.admin import router as admin_router
 from bot.handlers.support import router as support_router
 from bot.handlers.invite import router as invite_router
 from bot.handlers.regenerate import router as regenerate_router
+from bot.handlers.feedback import router as feedback_router
 from bot.handlers.errors import router as errors_router
 
 
@@ -34,6 +35,7 @@ def register_all_handlers(dp: Dispatcher) -> None:
     dp.include_router(guide_router)      # /guide command and button
     dp.include_router(generate_router)   # Generation flow (FSM)
     dp.include_router(edit_router)       # Edit flow (FSM)
+    dp.include_router(feedback_router)   # Feedback callbacks (👍/👎)
     dp.include_router(regenerate_router) # Regenerate callback
     dp.include_router(trends_router)     # Templates/trends (FSM)
     dp.include_router(profile_router)    # Profile callbacks
@@ -60,5 +62,6 @@ __all__ = [
     "support_router",
     "invite_router",
     "regenerate_router",
+    "feedback_router",
     "errors_router",
 ]
