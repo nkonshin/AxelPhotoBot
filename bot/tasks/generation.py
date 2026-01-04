@@ -19,6 +19,7 @@ from bot.db.repositories import TaskRepository
 from bot.services.balance import BalanceService
 from bot.services.image_provider import OpenAIImageProvider, GenerationResult
 from bot.services.image_tokens import estimate_api_tokens, IMAGE_QUALITY_LABELS
+from bot.services.admin_notify import notify_generation_failure, notify_moderation_block
 
 logger = logging.getLogger(__name__)
 
