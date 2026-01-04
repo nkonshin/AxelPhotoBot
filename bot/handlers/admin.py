@@ -25,6 +25,28 @@ logger = logging.getLogger(__name__)
 router = Router(name="admin")
 
 
+# Admin help text
+ADMIN_HELP_TEXT = """
+🔐 <b>Админ-команды</b>
+
+📊 <b>Статистика:</b>
+/admin — Админ-панель с кнопками
+/stats — Статистика бота (пользователи, генерации)
+
+👥 <b>Пользователи:</b>
+/userinfo &lt;telegram_id&gt; — Информация о пользователе
+/addtokens &lt;telegram_id&gt; &lt;amount&gt; — Добавить токены
+/resetuser &lt;@username|telegram_id&gt; — Сбросить пользователя
+
+📢 <b>Рассылка:</b>
+/broadcast — Отправить сообщение всем пользователям
+
+⚙️ <b>Настройки:</b>
+/togglesub — Вкл/выкл проверку подписки на канал
+/adminhelp — Эта справка
+"""
+
+
 def admin_required(func):
     """Decorator to check if user is admin."""
     async def wrapper(message: Message, *args, **kwargs):
@@ -57,6 +79,12 @@ def admin_menu_keyboard():
         InlineKeyboardButton(
             text="🔄 Обновить",
             callback_data="admin:refresh",
+        ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="📋 Справка",
+            callback_data="admin:help",
         ),
     )
     
@@ -343,4 +371,111 @@ async def user_info_command(message: Message) -> None:
         f"  • Успешных: {done_count}\n"
         f"  • Неудачных: {failed_count}\n\n"
         f"<b>Регистрация:</b> {user.created_at.strftime('%d.%m.%Y %H:%M') if user.created_at else '—'}"
+    )
+
+
+@router.message(Command("adminhelp"))
+async def admin_help_command(message: Message) -> None:
+    """Show admin help with all available commands."""
+    if not config.is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад в админ-панель",
+            callback_data="admin:back",
+        )
+    )
+    
+    await message.answer(
+        text=ADMIN_HELP_TEXT,
+        reply_markup=builder.as_markup(),
+    )
+
+
+@router.callback_query(F.data == "admin:help")
+async def admin_help_callback(callback: CallbackQuery) -> None:
+    """Handle help button click."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад в админ-панель",
+            callback_data="admin:back",
+        )
+    )
+    
+    await callback.message.edit_text(
+        text=ADMIN_HELP_TEXT,
+        reply_markup=builder.as_markup(),
+    )
+    await callback.answer()
+
+
+@router.message(Command("resetuser"))
+async def reset_user_command(message: Message) -> None:
+    """Reset user to default state. Usage: /resetuser <@username|telegram_id>"""
+    if not config.is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    
+    args = message.text.split()[1:]
+    
+    if len(args) != 1:
+        await message.answer(
+            "❌ <b>Неверный формат</b>\n\n"
+            "Использование:\n"
+            "<code>/resetuser @username</code>\n"
+            "<code>/resetuser 123456789</code>"
+        )
+        return
+    
+    identifier = args[0]
+    
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        user_repo = UserRepository(session)
+        
+        # Search by username or telegram_id
+        if identifier.startswith("@"):
+            user = await user_repo.get_by_username(identifier[1:])
+        else:
+            try:
+                telegram_id = int(identifier)
+                user = await user_repo.get_by_telegram_id(telegram_id)
+            except ValueError:
+                await message.answer("❌ Неверный формат ID")
+                return
+        
+        if user is None:
+            await message.answer(f"❌ Пользователь {identifier} не найден")
+            return
+        
+        # Save old values for report
+        old_tokens = user.tokens
+        old_model = user.selected_model
+        old_quality = user.image_quality
+        old_size = user.image_size
+        
+        # Reset to defaults
+        user.tokens = config.initial_tokens
+        user.selected_model = "gpt-image-1.5"
+        user.image_quality = "medium"
+        user.image_size = "1024x1024"
+        await session.commit()
+    
+    await message.answer(
+        f"✅ <b>Пользователь сброшен</b>\n\n"
+        f"<b>Пользователь:</b> {user.first_name or user.username or identifier}\n"
+        f"<b>Telegram ID:</b> <code>{user.telegram_id}</code>\n\n"
+        f"<b>Изменения:</b>\n"
+        f"  • Токены: {old_tokens} → {config.initial_tokens}\n"
+        f"  • Модель: {old_model} → gpt-image-1.5\n"
+        f"  • Качество: {old_quality} → medium\n"
+        f"  • Размер: {old_size} → 1024x1024"
     )

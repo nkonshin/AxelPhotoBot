@@ -67,12 +67,13 @@ async def show_profile(callback: CallbackQuery) -> None:
             await callback.answer()
             return
         
-        # Get user's generation history
-        history = await task_repo.get_user_history(user.id, limit=10)
+        # Get user's generation history (only 3 most recent)
+        history = await task_repo.get_user_history(user.id, limit=3)
         
-        # Count completed generations
-        total_generations = len(history)
-        successful_generations = sum(1 for t in history if t.status == "done")
+        # Get total count for stats (separate query)
+        all_history = await task_repo.get_user_history(user.id, limit=100)
+        total_generations = len(all_history)
+        successful_generations = sum(1 for t in all_history if t.status == "done")
     
     # Format quality label
     quality_label = IMAGE_QUALITY_LABELS.get(user.image_quality, user.image_quality)
@@ -90,7 +91,7 @@ async def show_profile(callback: CallbackQuery) -> None:
     
     if history:
         text += "<b>📋 Последние генерации:</b>\n\n"
-        for i, task in enumerate(history[:10], 1):
+        for i, task in enumerate(history[:3], 1):
             status_icon = format_task_status(task.status)
             task_type = format_task_type(task.task_type)
             date = format_date(task.created_at)
@@ -109,22 +110,8 @@ async def show_profile(callback: CallbackQuery) -> None:
             "Создайте первое изображение в разделе «Создать картинку»!"
         )
 
+    # Only back button, no history image buttons
     builder = InlineKeyboardBuilder()
-    if history:
-        for i, task in enumerate(history[:10], 1):
-            if task.status != "done":
-                continue
-            if not (task.result_file_id or task.result_image_url):
-                continue
-
-            task_type = format_task_type(task.task_type)
-            builder.row(
-                InlineKeyboardButton(
-                    text=f"🖼 {i}. {task_type}",
-                    callback_data=f"history:show:{task.id}",
-                )
-            )
-
     builder.row(
         InlineKeyboardButton(
             text="◀️ Назад в меню",
