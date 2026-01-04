@@ -1,0 +1,177 @@
+INFO:     172.18.0.1:55970 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:55976 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 22:05:29,571 - aiogram.event - INFO - Update id=37542520 is handled. Duration 142 ms by bot id=8539621814
+telegram_bot_db | 2026-01-04 22:05:30.925 UTC [41] ERROR:  value too long for type character varying(500)
+telegram_bot_db | 2026-01-04 22:05:30.925 UTC [41] STATEMENT:  INSERT INTO generation_tasks (user_id, task_type, model, image_quality, image_size, prompt, source_image_url, result_image_url, result_file_id, status, tokens_spent, api_tokens_spent, images_count, retry_count, error_message, updated_at) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::VARCHAR, $9::VARCHAR, $10::VARCHAR, $11::INTEGER, $12::INTEGER, $13::INTEGER, $14::INTEGER, $15::VARCHAR, $16::TIMESTAMP WITH TIME ZONE) RETURNING generation_tasks.id, generation_tasks.created_at
+telegram_bot_app | 2026-01-04 22:05:30,931 - bot.handlers.errors - ERROR - Unhandled exception: DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.StringDataRightTruncationError'>: value too long for type character varying(500)
+telegram_bot_app | [SQL: INSERT INTO generation_tasks (user_id, task_type, model, image_quality, image_size, prompt, source_image_url, result_image_url, result_file_id, status, tokens_spent, api_tokens_spent, images_count, retry_count, error_message, updated_at) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::VARCHAR, $9::VARCHAR, $10::VARCHAR, $11::INTEGER, $12::INTEGER, $13::INTEGER, $14::INTEGER, $15::VARCHAR, $16::TIMESTAMP WITH TIME ZONE) RETURNING generation_tasks.id, generation_tasks.created_at]
+telegram_bot_app | [parameters: (3, 'edit', 'gpt-image-1.5', 'medium', '1024x1536', 'Черно-белый портретный крупный план молодого мужчины с выразительными чертами лица, снятый на темном однородном фоне. Сохранить черты лица, прическу, ... (601 characters truncated) ... ельности глаз. Обработка: глубокий черно-белый контраст, высокая детализация, без размытия и мягких фильтров, эффект мощной fashion-рекламной съемки.', '["AgACAgIAAxkBAAOFaVrjoXnLskDiws6yxPovCeggN2YAArMQaxvi1dlKJQxVng5EGYoBAAMCAAN3AAM4BA", "AgACAgIAAxkBAAOHaVrjr3hcdP4yrJwEISYBIW4Cl2YAArQQaxvi1dlKSI_Fb ... (220 characters truncated) ... hrObhvoEasVrhuJhF7rEAArkQaxvi1dlKAAFlO1BP1rA4AQADAgADdwADOAQ", "AgACAgIAAxkBAAOLaVrjy6_hrObhvoEasVrhuJhF7rEAArkQaxvi1dlKAAFlO1BP1rA4AQADAgADdwADOAQ"]', None, None, 'pending', 6, 0, 6, 0, None, None)]
+telegram_bot_app | (Background on this error at: https://sqlalche.me/e/20/dbapi)
+telegram_bot_app | Traceback (most recent call last):
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 550, in _prepare_and_execute
+telegram_bot_app |     self._rows = deque(await prepared_stmt.fetch(*parameters))
+telegram_bot_app |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/asyncpg/prepared_stmt.py", line 177, in fetch
+telegram_bot_app |     data = await self.__bind_execute(args, 0, timeout)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/asyncpg/prepared_stmt.py", line 268, in __bind_execute
+telegram_bot_app |     data, status, _ = await self.__do_execute(
+telegram_bot_app |                       ^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/asyncpg/prepared_stmt.py", line 257, in __do_execute
+telegram_bot_app |     return await executor(protocol)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "asyncpg/protocol/protocol.pyx", line 205, in bind_execute
+telegram_bot_app | asyncpg.exceptions.StringDataRightTruncationError: value too long for type character varying(500)
+telegram_bot_app | 
+telegram_bot_app | The above exception was the direct cause of the following exception:
+telegram_bot_app | 
+telegram_bot_app | Traceback (most recent call last):
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+telegram_bot_app |     self.dialect.do_execute(
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+telegram_bot_app |     cursor.execute(statement, parameters)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
+telegram_bot_app |     self._adapt_connection.await_(
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+telegram_bot_app |     return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+telegram_bot_app |     value = await result
+telegram_bot_app |             ^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
+telegram_bot_app |     self._handle_exception(error)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
+telegram_bot_app |     self._adapt_connection._handle_exception(error)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+telegram_bot_app |     raise translated_error from error
+telegram_bot_app | sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.Error: <class 'asyncpg.exceptions.StringDataRightTruncationError'>: value too long for type character varying(500)
+telegram_bot_app | 
+telegram_bot_app | The above exception was the direct cause of the following exception:
+telegram_bot_app | 
+telegram_bot_app | Traceback (most recent call last):
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/middlewares/error.py", line 27, in __call__
+telegram_bot_app |     return await handler(event, data)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/middlewares/user_context.py", line 58, in __call__
+telegram_bot_app |     return await handler(event, data)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/fsm/middleware.py", line 43, in __call__
+telegram_bot_app |     return await handler(event, data)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/event/telegram.py", line 126, in trigger
+telegram_bot_app |     return await wrapped_inner(event, kwargs)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/event/handler.py", line 71, in call
+telegram_bot_app |     return await wrapped()
+telegram_bot_app |            ^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 283, in _listen_update
+telegram_bot_app |     return await self.propagate_event(update_type=update_type, event=event, **kwargs)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/router.py", line 161, in propagate_event
+telegram_bot_app |     return await observer.wrap_outer_middleware(_wrapped, event=event, data=kwargs)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/router.py", line 153, in _wrapped
+telegram_bot_app |     return await self._propagate_event(
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/router.py", line 189, in _propagate_event
+telegram_bot_app |     response = await router.propagate_event(update_type=update_type, event=event, **kwargs)
+telegram_bot_app |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/router.py", line 161, in propagate_event
+telegram_bot_app |     return await observer.wrap_outer_middleware(_wrapped, event=event, data=kwargs)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/router.py", line 153, in _wrapped
+telegram_bot_app |     return await self._propagate_event(
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/router.py", line 181, in _propagate_event
+telegram_bot_app |     response = await observer.trigger(event, **kwargs)
+telegram_bot_app |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/event/telegram.py", line 126, in trigger
+telegram_bot_app |     return await wrapped_inner(event, kwargs)
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/aiogram/dispatcher/event/handler.py", line 71, in call
+telegram_bot_app |     return await wrapped()
+telegram_bot_app |            ^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/app/bot/handlers/edit.py", line 796, in confirm_edit
+telegram_bot_app |     task = await task_repo.create(
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/app/bot/db/repositories.py", line 233, in create
+telegram_bot_app |     await self.session.commit()
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/ext/asyncio/session.py", line 1000, in commit
+telegram_bot_app |     await greenlet_spawn(self.sync_session.commit)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 203, in greenlet_spawn
+telegram_bot_app |     result = context.switch(value)
+telegram_bot_app |              ^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2030, in commit
+telegram_bot_app |     trans.commit(_to_root=True)
+telegram_bot_app |   File "<string>", line 2, in commit
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+telegram_bot_app |     ret_value = fn(self, *arg, **kw)
+telegram_bot_app |                 ^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 1311, in commit
+telegram_bot_app |     self._prepare_impl()
+telegram_bot_app |   File "<string>", line 2, in _prepare_impl
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+telegram_bot_app |     ret_value = fn(self, *arg, **kw)
+telegram_bot_app |                 ^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 1286, in _prepare_impl
+telegram_bot_app |     self.session.flush()
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 4331, in flush
+telegram_bot_app |     self._flush(objects)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 4466, in _flush
+telegram_bot_app |     with util.safe_reraise():
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line 224, in __exit__
+telegram_bot_app |     raise exc_value.with_traceback(exc_tb)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 4427, in _flush
+telegram_bot_app |     flush_context.execute()
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/unitofwork.py", line 466, in execute
+telegram_bot_app |     rec.execute(self)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/unitofwork.py", line 642, in execute
+telegram_bot_app |     util.preloaded.orm_persistence.save_obj(
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/persistence.py", line 93, in save_obj
+telegram_bot_app |     _emit_insert_statements(
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/persistence.py", line 1233, in _emit_insert_statements
+telegram_bot_app |     result = connection.execute(
+telegram_bot_app |              ^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+telegram_bot_app |     return meth(
+telegram_bot_app |            ^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+telegram_bot_app |     return connection._execute_clauseelement(
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+telegram_bot_app |     ret = self._execute_context(
+telegram_bot_app |           ^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+telegram_bot_app |     return self._exec_single_context(
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+telegram_bot_app |     self._handle_dbapi_exception(
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+telegram_bot_app |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+telegram_bot_app |     self.dialect.do_execute(
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+telegram_bot_app |     cursor.execute(statement, parameters)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
+telegram_bot_app |     self._adapt_connection.await_(
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+telegram_bot_app |     return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+telegram_bot_app |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+telegram_bot_app |     value = await result
+telegram_bot_app |             ^^^^^^^^^^^^
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
+telegram_bot_app |     self._handle_exception(error)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
+telegram_bot_app |     self._adapt_connection._handle_exception(error)
+telegram_bot_app |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+telegram_bot_app |     raise translated_error from error
+telegram_bot_app | sqlalchemy.exc.DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.StringDataRightTruncationError'>: value too long for type character varying(500)
+telegram_bot_app | [SQL: INSERT INTO generation_tasks (user_id, task_type, model, image_quality, image_size, prompt, source_image_url, result_image_url, result_file_id, status, tokens_spent, api_tokens_spent, images_count, retry_count, error_message, updated_at) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::VARCHAR, $9::VARCHAR, $10::VARCHAR, $11::INTEGER, $12::INTEGER, $13::INTEGER, $14::INTEGER, $15::VARCHAR, $16::TIMESTAMP WITH TIME ZONE) RETURNING generation_tasks.id, generation_tasks.created_at]
+telegram_bot_app | [parameters: (3, 'edit', 'gpt-image-1.5', 'medium', '1024x1536', 'Черно-белый портретный крупный план молодого мужчины с выразительными чертами лица, снятый на темном однородном фоне. Сохранить черты лица, прическу, ... (601 characters truncated) ... ельности глаз. Обработка: глубокий черно-белый контраст, высокая детализация, без размытия и мягких фильтров, эффект мощной fashion-рекламной съемки.', '["AgACAgIAAxkBAAOFaVrjoXnLskDiws6yxPovCeggN2YAArMQaxvi1dlKJQxVng5EGYoBAAMCAAN3AAM4BA", "AgACAgIAAxkBAAOHaVrjr3hcdP4yrJwEISYBIW4Cl2YAArQQaxvi1dlKSI_Fb ... (220 characters truncated) ... hrObhvoEasVrhuJhF7rEAArkQaxvi1dlKAAFlO1BP1rA4AQADAgADdwADOAQ", "AgACAgIAAxkBAAOLaVrjy6_hrObhvoEasVrhuJhF7rEAArkQaxvi1dlKAAFlO1BP1rA4AQADAgADdwADOAQ"]', None, None, 'pending', 6, 0, 6, 0, None, None)]
+telegram_bot_app | (Background on this error at: https://sqlalche.me/e/20/dbapi)
+telegram_bot_app | 2026-01-04 22:05:31,042 - aiogram.event - INFO - Update id=37542521 is handled. Duration 136 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:55986 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_db | 2026-01-04 22:05:36.891 UTC [879] FATAL:  password authentication failed for user "sabrina.suterio"
+telegram_bot_db | 2026-01-04 22:05:36.891 UTC [879] DETAIL:  Role "sabrina.suterio" does not exist.
+telegram_bot_db |       Connection matched pg_hba.conf line 100: "host all all all scram-sha-256"

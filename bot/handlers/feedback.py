@@ -6,15 +6,16 @@ Handles user feedback (👍/👎) and retry functionality.
 import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
+from aiogram.fsm.context import FSMContext
 
 from bot.db.database import get_session_maker
 from bot.db.repositories import TaskRepository, UserRepository
 from bot.keyboards.inline import (
     CallbackData,
-    negative_feedback_keyboard,
+    image_settings_confirm_keyboard,
 )
-from bot.services.image_tokens import calculate_total_cost
-from bot.tasks.generation import enqueue_generation_task
+from bot.services.image_tokens import estimate_image_tokens
+from bot.states.generation import GenerationStates, EditStates
 
 logger = logging.getLogger(__name__)
 
@@ -32,75 +33,108 @@ async def handle_positive_feedback(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith(CallbackData.FEEDBACK_NEGATIVE_PREFIX))
-async def handle_negative_feedback(callback: CallbackQuery) -> None:
-    """Handle negative feedback (👎) - show retry options."""
+async def handle_negative_feedback(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handle negative feedback (👎) - show settings menu like regenerate button."""
     task_id = int(callback.data.replace(CallbackData.FEEDBACK_NEGATIVE_PREFIX, ""))
     
     logger.info(f"Negative feedback for task {task_id} from user {callback.from_user.id}")
     
-    await callback.message.edit_reply_markup(
-        reply_markup=negative_feedback_keyboard(task_id)
-    )
-    await callback.answer("Жаль, что не понравилось 😔", show_alert=False)
-
-
-@router.callback_query(F.data.startswith(CallbackData.FEEDBACK_RETRY_PREFIX))
-async def handle_retry(callback: CallbackQuery) -> None:
-    """Handle retry request from negative feedback - regenerate with token cost."""
-    task_id = int(callback.data.replace(CallbackData.FEEDBACK_RETRY_PREFIX, ""))
-    
     session_maker = get_session_maker()
+    
     async with session_maker() as session:
         task_repo = TaskRepository(session)
         user_repo = UserRepository(session)
         
         # Get original task
-        original_task = await task_repo.get_by_id(task_id)
-        if not original_task:
-            await callback.answer("Задача не найдена", show_alert=True)
+        task = await task_repo.get_by_id(task_id)
+        
+        if task is None:
+            await callback.answer("❌ Задача не найдена", show_alert=True)
             return
         
         # Get user
-        user = await user_repo.get_by_id(original_task.user_id)
-        if not user:
-            await callback.answer("Пользователь не найден", show_alert=True)
+        user = await user_repo.get_by_telegram_id(callback.from_user.id)
+        
+        if user is None:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
             return
         
-        # Calculate token cost (same as original)
-        token_cost = calculate_total_cost(original_task.image_quality)
-        
-        # Check balance
-        if user.tokens < token_cost:
-            await callback.answer(
-                "Ой! Кажется, токены закончились 📸",
-                show_alert=True
-            )
+        # Check if this task belongs to the user
+        if task.user_id != user.id:
+            await callback.answer("❌ Это не ваша задача", show_alert=True)
             return
         
-        # Deduct tokens
-        await user_repo.update_tokens(user.id, -token_cost)
-        
-        # Create new task with same parameters
-        new_task = await task_repo.create(
+        balance = user.tokens
+        quality = task.image_quality
+        size = task.image_size
+        model = task.model
+        prompt = task.prompt
+    
+    cost = estimate_image_tokens(quality, size)
+    
+    # Determine if it's a generate or edit task
+    if task.task_type == "generate":
+        # Save to state for generation flow
+        await state.update_data(
+            prompt=prompt,
             user_id=user.id,
-            task_type=original_task.task_type,
-            prompt=original_task.prompt,
-            source_image_url=original_task.source_image_url,
-            model=original_task.model,
-            image_quality=original_task.image_quality,
-            image_size=original_task.image_size,
-            tokens_spent=token_cost,
+            image_quality=quality,
+            image_size=size,
+            model=model,
+            expensive_confirmed=False,
         )
+        await state.set_state(GenerationStates.confirm_generation)
         
-        logger.info(
-            f"Retry task {new_task.id} created from {task_id} "
-            f"for user {callback.from_user.id}, cost: {token_cost} tokens"
+        prompt_preview = prompt[:500] + "..." if len(prompt) > 500 else prompt
+        
+        text = (
+            f"😔 <b>Жаль, что не понравилось</b>\n\n"
+            f"Попробуйте изменить настройки:\n\n"
+            f"<b>Ваш промпт:</b>\n<i>{prompt_preview}</i>\n\n"
+            f"<b>Модель:</b> {model}\n"
+            f"<b>Качество:</b> {quality}\n"
+            f"<b>Формат:</b> {size}\n\n"
+            f"<b>Стоимость:</b> {cost} 🪙\n"
+            f"<b>Ваш баланс:</b> {balance} 🪙\n"
+            f"<b>После генерации:</b> {balance - cost} 🪙\n\n"
+            f"Подтвердить генерацию?"
         )
+    else:
+        # Edit task - need source image
+        source_file_id = task.source_image_url
         
-        # Enqueue for processing
-        enqueue_generation_task(new_task.id)
+        if not source_file_id:
+            await callback.answer("❌ Исходное изображение не найдено", show_alert=True)
+            return
         
-        await callback.answer("Генерирую заново... ⏳", show_alert=False)
+        await state.update_data(
+            prompt=prompt,
+            user_id=user.id,
+            source_file_id=source_file_id,
+            image_quality=quality,
+            image_size=size,
+            model=model,
+            expensive_confirmed=False,
+        )
+        await state.set_state(EditStates.confirm_edit)
         
-        # Update message to show retry initiated
-        await callback.message.edit_reply_markup(reply_markup=None)
+        prompt_preview = prompt[:500] + "..." if len(prompt) > 500 else prompt
+        
+        text = (
+            f"😔 <b>Жаль, что не понравилось</b>\n\n"
+            f"Попробуйте изменить настройки:\n\n"
+            f"<b>Описание изменений:</b>\n<i>{prompt_preview}</i>\n\n"
+            f"<b>Модель:</b> {model}\n"
+            f"<b>Качество:</b> {quality}\n"
+            f"<b>Формат:</b> {size}\n\n"
+            f"<b>Стоимость:</b> {cost} 🪙\n"
+            f"<b>Ваш баланс:</b> {balance} 🪙\n"
+            f"<b>После редактирования:</b> {balance - cost} 🪙\n\n"
+            f"Подтвердить редактирование?"
+        )
+    
+    await callback.message.answer(
+        text=text,
+        reply_markup=image_settings_confirm_keyboard(quality, size),
+    )
+    await callback.answer("Жаль, что не понравилось 😔", show_alert=False)

@@ -1,0 +1,85 @@
+telegram_bot_worker | 2026-01-04 21:32:54,204 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/images/edits "HTTP/1.1 400 Bad Request"
+telegram_bot_worker | 2026-01-04 21:32:54,219 - bot.services.image_provider - ERROR - Image edit failed: Error code: 400 - {'error': {'message': 'Your request was rejected by the safety system. If you believe this is an error, contact us at help.openai.com and include the request ID req_83019126d7ca4b5da06af03bb9b88248.', 'type': 'image_generation_user_error', 'param': None, 'code': 'moderation_blocked'}}
+telegram_bot_worker | 2026-01-04 21:32:54,746 - bot.tasks.generation - WARNING - Task 11 generation failed: Error code: 400 - {'error': {'message': 'Your request was rejected by the safety system. If you believe this is an error, contact us at help.openai.com and include the request ID req_83019126d7ca4b5da06af03bb9b88248.', 'type': 'image_generation_user_error', 'param': None, 'code': 'moderation_blocked'}}
+telegram_bot_worker | 2026-01-04 21:32:55,005 - bot.tasks.generation - ERROR - Failed to delete animation message: Telegram server says - Bad Request: message to delete not found
+telegram_bot_worker | 2026-01-04 21:32:55,006 - asyncio - ERROR - Unclosed client session
+telegram_bot_worker | client_session: <aiohttp.client.ClientSession object at 0x759a223f7f10>
+telegram_bot_worker | 2026-01-04 21:32:55,006 - asyncio - ERROR - Unclosed connector
+telegram_bot_worker | connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0x759a22403a80>, 887786.820164326)])']
+telegram_bot_worker | connector: <aiohttp.connector.TCPConnector object at 0x759a2834f490>
+telegram_bot_worker | 2026-01-04 21:32:55,007 - bot.tasks.generation - ERROR - Task 11 failed with error: Error code: 400 - {'error': {'message': 'Your request was rejected by the safety system. If you believe this is an error, contact us at help.openai.com and include the request ID req_83019126d7ca4b5da06af03bb9b88248.', 'type': 'image_generation_user_error', 'param': None, 'code': 'moderation_blocked'}}
+telegram_bot_worker | 2026-01-04 21:32:55,123 - bot.tasks.generation - INFO - Task 11 retry 1/3, re-queuing...
+telegram_bot_worker | 2026-01-04 21:32:55,152 - rq.worker - ERROR - Worker 81f781ef72354c538963dee7b831f5b0: job c87ffb3c-cd07-4e46-a743-3640ccf8d8ac: exception raised while executing (bot.tasks.generation.process_generation_task)
+telegram_bot_worker | Traceback (most recent call last):
+telegram_bot_worker |   File "/usr/local/lib/python3.11/site-packages/rq/worker.py", line 1439, in perform_job
+telegram_bot_worker |     return_value = job.perform()
+telegram_bot_worker |                    ^^^^^^^^^^^^^
+telegram_bot_worker |   File "/usr/local/lib/python3.11/site-packages/rq/job.py", line 1318, in perform
+telegram_bot_worker |     self._result = self._execute()
+telegram_bot_worker |                    ^^^^^^^^^^^^^^^
+telegram_bot_worker |   File "/usr/local/lib/python3.11/site-packages/rq/job.py", line 1376, in _execute
+telegram_bot_worker |     result = self.func(*self.args, **self.kwargs)
+telegram_bot_worker |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_worker |   File "/app/bot/tasks/generation.py", line 81, in process_generation_task
+telegram_bot_worker |     return asyncio.get_event_loop().run_until_complete(
+telegram_bot_worker |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+telegram_bot_worker |   File "/usr/local/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+telegram_bot_worker |     return future.result()
+telegram_bot_worker |            ^^^^^^^^^^^^^^^
+telegram_bot_worker |   File "/app/bot/tasks/generation.py", line 197, in _process_generation_task_async
+telegram_bot_worker |     raise GenerationError(error_msg)
+telegram_bot_worker | bot.tasks.generation.GenerationError: Error code: 400 - {'error': {'message': 'Your request was rejected by the safety system. If you believe this is an error, contact us at help.openai.com and include the request ID req_83019126d7ca4b5da06af03bb9b88248.', 'type': 'image_generation_user_error', 'param': None, 'code': 'moderation_blocked'}}
+telegram_bot_worker | 
+telegram_bot_worker | 2026-01-04 21:32:55,162 - rq.job - INFO - Job c87ffb3c-cd07-4e46-a743-3640ccf8d8ac: scheduled for retry at 2026-01-04 21:33:05.154429+00:00, 2 remaining
+telegram_bot_redis | 1:M 04 Jan 2026 21:32:55.304 * 100 changes in 300 seconds. Saving...
+telegram_bot_redis | 1:M 04 Jan 2026 21:32:55.306 * Background saving started by pid 653
+telegram_bot_redis | 653:C 04 Jan 2026 21:32:55.314 * DB saved on disk
+telegram_bot_redis | 653:C 04 Jan 2026 21:32:55.315 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+telegram_bot_redis | 1:M 04 Jan 2026 21:32:55.407 * Background saving terminated with success
+telegram_bot_db | 2026-01-04 21:33:13.799 UTC [345] FATAL:  password authentication failed for user "sabrinar"
+telegram_bot_db | 2026-01-04 21:33:13.799 UTC [345] DETAIL:  Role "sabrinar" does not exist.
+telegram_bot_db |       Connection matched pg_hba.conf line 100: "host all all all scram-sha-256"
+telegram_bot_app | INFO:     172.18.0.1:47358 - "POST /webhook HTTP/1.0" 200 OK
+
+
+telegram_bot_app | 2026-01-04 21:53:15,259 - bot.handlers.feedback - INFO - Positive feedback for task 12 from user 7359628085
+telegram_bot_app | 2026-01-04 21:53:15,416 - aiogram.event - INFO - Update id=37542502 is handled. Duration 161 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:39586 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 21:53:17,356 - bot.handlers.feedback - INFO - Negative feedback for task 12 from user 7359628085
+telegram_bot_app | 2026-01-04 21:53:17,470 - aiogram.event - INFO - Update id=37542503 is handled. Duration 118 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:39598 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 21:53:23,173 - bot.handlers.feedback - INFO - Retry task 13 created from 12 for user 7359628085, cost: 5 tokens
+telegram_bot_app | 2026-01-04 21:53:23,178 - bot.tasks.generation - INFO - Enqueued task 13 as job 722a31b0-a177-44ef-ae87-eaa57592ba90
+telegram_bot_worker | 2026-01-04 21:53:23,179 - rq.worker - INFO - default: bot.tasks.generation.process_generation_task(13) (722a31b0-a177-44ef-ae87-eaa57592ba90)
+telegram_bot_app | 2026-01-04 21:53:23,314 - aiogram.event - INFO - Update id=37542504 is handled. Duration 181 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:41360 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_worker | 2026-01-04 21:53:24,792 - bot.tasks.generation - INFO - Processing generation task 13
+telegram_bot_worker | 2026-01-04 21:53:25,080 - bot.tasks.generation - INFO - Task 13 status updated to processing
+telegram_bot_worker | 2026-01-04 21:53:28,745 - bot.services.image_provider - INFO - Editing image with model gpt-image-1.5, prompt: Create a high-end black and white studio portrait of a couple, based on the provided reference image...
+telegram_bot_worker | 2026-01-04 21:53:29,207 - bot.services.image_provider - INFO - Downloaded image 1 from Telegram: 346467 bytes
+telegram_bot_worker | 2026-01-04 21:53:30,049 - bot.services.image_provider - INFO - Downloaded image 2 from Telegram: 2290802 bytes
+telegram_bot_worker | 2026-01-04 21:53:30,341 - bot.services.image_provider - INFO - Sending 2 image(s) to OpenAI edit endpoint
+telegram_bot_db | 2026-01-04 21:54:09.829 UTC [692] FATAL:  password authentication failed for user "sabrinadalmolin"
+telegram_bot_db | 2026-01-04 21:54:09.829 UTC [692] DETAIL:  Role "sabrinadalmolin" does not exist.
+telegram_bot_db |       Connection matched pg_hba.conf line 100: "host all all all scram-sha-256"
+telegram_bot_worker | 2026-01-04 21:54:10,681 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/images/edits "HTTP/1.1 200 OK"
+telegram_bot_worker | 2026-01-04 21:54:12,671 - bot.services.image_provider - INFO - Image edited successfully (base64)
+telegram_bot_worker | 2026-01-04 21:54:43,059 - bot.tasks.generation - INFO - Result sent to user 7359628085 for task 13
+telegram_bot_db | 2026-01-04 21:54:57.110 UTC [25] LOG:  checkpoint starting: time
+telegram_bot_db | 2026-01-04 21:54:59.330 UTC [25] LOG:  checkpoint complete: wrote 7 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.538 s, sync=0.129 s, total=2.191 s; sync files=6, longest=0.041 s, average=0.016 s; distance=21 kB, estimate=70 kB
+telegram_bot_worker | 2026-01-04 21:55:11,804 - bot.tasks.generation - INFO - Task 13 completed successfully (API tokens: 1584)
+telegram_bot_worker | 2026-01-04 21:55:14,055 - rq.worker - INFO - Successfully completed bot.tasks.generation.process_generation_task(13) job in 0:01:49.334298s on worker 81f781ef72354c538963dee7b831f5b0
+telegram_bot_worker | 2026-01-04 21:55:14,299 - rq.worker - INFO - default: Job OK (722a31b0-a177-44ef-ae87-eaa57592ba90)
+telegram_bot_worker | 2026-01-04 21:55:14,478 - rq.worker - INFO - Result is kept for 500 seconds
+telegram_bot_app | INFO:     172.18.0.1:36778 - "GET /wp-admin/setup-config.php HTTP/1.0" 404 Not Found
+telegram_bot_app | INFO:     172.18.0.1:44426 - "GET /wordpress/wp-admin/setup-config.php HTTP/1.0" 404 Not Found
+telegram_bot_app | INFO:     172.18.0.1:44982 - "GET /wordpress/wp-admin/setup-config.php HTTP/1.0" 404 Not Found
+telegram_bot_db | 2026-01-04 21:56:57.243 UTC [725] FATAL:  password authentication failed for user "sabrinab"
+telegram_bot_db | 2026-01-04 21:56:57.243 UTC [725] DETAIL:  Role "sabrinab" does not exist.
+telegram_bot_db |       Connection matched pg_hba.conf line 100: "host all all all scram-sha-256"
+telegram_bot_app | INFO:     172.18.0.1:57222 - "GET /wp-admin/setup-config.php HTTP/1.0" 404 Not Found
+telegram_bot_redis | 1:M 04 Jan 2026 21:57:52.059 * 100 changes in 300 seconds. Saving...
+telegram_bot_redis | 1:M 04 Jan 2026 21:57:52.060 * Background saving started by pid 1464
+telegram_bot_redis | 1464:C 04 Jan 2026 21:57:52.066 * DB saved on disk
+telegram_bot_redis | 1464:C 04 Jan 2026 21:57:52.068 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+telegram_bot_redis | 1:M 04 Jan 2026 21:57:52.161 * Background saving terminated with success

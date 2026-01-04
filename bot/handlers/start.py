@@ -148,17 +148,20 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         is_new_user = existing_user is None
         
         if is_new_user:
+            # Send welcome video for ALL new users (before subscription check)
+            if config.welcome_video_file_id:
+                try:
+                    await message.answer_video_note(
+                        video_note=config.welcome_video_file_id,
+                    )
+                    logger.info(f"Welcome video sent to new user {user_tg.id}")
+                except Exception as e:
+                    logger.error(f"Failed to send welcome video to {user_tg.id}: {e}")
+            
+            # Check subscription requirement
             subscription_required = await get_subscription_required()
             
             if subscription_required and config.subscription_channel:
-                if config.welcome_video_file_id:
-                    try:
-                        await message.answer_video_note(
-                            video_note=config.welcome_video_file_id,
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to send welcome video: {e}")
-                
                 is_subscribed = await check_subscription(
                     bot, user_tg.id, config.subscription_channel
                 )
@@ -188,16 +191,6 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
                 f"New user registered: {user_tg.id} (@{user_tg.username})"
                 + (f" referred by {referrer_telegram_id}" if referrer_id else "")
             )
-            
-            subscription_required = await get_subscription_required()
-            if not subscription_required and config.welcome_video_file_id:
-                try:
-                    await message.answer_video_note(
-                        video_note=config.welcome_video_file_id,
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send welcome video: {e}")
-            
             text = WELCOME_MESSAGE.format(tokens=user.tokens)
         else:
             logger.info(

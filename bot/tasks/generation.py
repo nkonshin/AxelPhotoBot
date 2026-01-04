@@ -191,10 +191,45 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 
                 return True
             else:
-                # API returned error - raise for retry
+                # API returned error - check if it's moderation error
                 error_msg = result.error or "Unknown error"
                 logger.warning(f"Task {task_id} generation failed: {error_msg}")
+                
+                # Check for moderation/content policy errors - no retry needed
+                if "moderation" in error_msg.lower() or "safety" in error_msg.lower() or "content policy" in error_msg.lower():
+                    raise ModerationError(error_msg)
+                
                 raise GenerationError(error_msg)
+        
+        except ModerationError as e:
+            # Delete animation message on error
+            if animation_message_id and telegram_id:
+                await _delete_animation_message(telegram_id, animation_message_id)
+            
+            error_msg = str(e)
+            logger.warning(f"Task {task_id} blocked by moderation: {error_msg}")
+            
+            # Mark as failed immediately (no retries for moderation)
+            await task_repo.update_status(
+                task_id,
+                status="failed",
+                error_message="Content moderation",
+            )
+            
+            # Refund tokens
+            await balance_service.refund_task(task_id)
+            logger.info(f"Task {task_id} marked as failed (moderation), tokens refunded")
+            
+            # Send moderation notification to user
+            await _send_moderation_notification(task)
+            
+            # Notify admins
+            from aiogram import Bot
+            bot = Bot(token=config.bot_token)
+            await _notify_admins_about_error(bot, task, error_msg)
+            await bot.session.close()
+            
+            return False
         
         except Exception as e:
             # Delete animation message on error
@@ -289,6 +324,11 @@ async def _delete_animation_message(telegram_id: int, message_id: int) -> None:
 
 class GenerationError(Exception):
     """Custom exception for generation failures."""
+    pass
+
+
+class ModerationError(Exception):
+    """Exception for content moderation failures (no retry needed)."""
     pass
 
 
@@ -451,6 +491,51 @@ async def _send_failure_notification(task: GenerationTask, error_msg: str) -> No
     
     except Exception as e:
         logger.error(f"Failed to send failure notification: {e}")
+
+
+async def _send_moderation_notification(task: GenerationTask) -> None:
+    """
+    Send moderation notification to user when content is blocked.
+    
+    Args:
+        task: GenerationTask that was blocked
+    """
+    try:
+        from aiogram import Bot
+        
+        bot = Bot(token=config.bot_token)
+        
+        # Get user's telegram_id
+        session_maker = get_session_maker()
+        async with session_maker() as session:
+            from sqlalchemy import select
+            from bot.db.models import User
+            
+            result = await session.execute(
+                select(User.telegram_id).where(User.id == task.user_id)
+            )
+            telegram_id = result.scalar_one_or_none()
+            
+            if telegram_id is None:
+                logger.error(f"User {task.user_id} not found for task {task.id}")
+                return
+        
+        # Send moderation notification to user
+        message = (
+            f"⚠️ <b>Запрос отклонён модерацией</b>\n\n"
+            f"К сожалению, ваш запрос не прошёл проверку безопасности OpenAI.\n\n"
+            f"Токены ({task.tokens_spent}) возвращены на ваш баланс.\n\n"
+            f"💡 <i>Попробуйте изменить описание и избегать запрещённого контента.</i>"
+        )
+        
+        await bot.send_message(chat_id=telegram_id, text=message, parse_mode="HTML")
+        
+        logger.info(f"Moderation notification sent to user {telegram_id} for task {task.id}")
+        
+        await bot.session.close()
+    
+    except Exception as e:
+        logger.error(f"Failed to send moderation notification: {e}")
 
 
 async def _notify_admins_about_error(bot, task: GenerationTask, error_msg: str) -> None:

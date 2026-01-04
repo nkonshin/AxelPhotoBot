@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"  # Only localhost access - prevents external brute-force attacks
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-botuser} -d ${POSTGRES_DB:-telegram_bot}"]
       interval: 30s
@@ -25,7 +25,7 @@ services:
     image: redis:7-alpine
     container_name: telegram_bot_redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"  # Only localhost access - prevents external attacks
     volumes:
       - redis_data:/data
     healthcheck:
@@ -63,6 +63,12 @@ services:
       # Admin settings
       ADMIN_IDS: ${ADMIN_IDS:-}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      # Subscription settings
+      SUBSCRIPTION_CHANNEL: ${SUBSCRIPTION_CHANNEL:-}
+      SUBSCRIPTION_REQUIRED: ${SUBSCRIPTION_REQUIRED:-true}
+      WELCOME_VIDEO_FILE_ID: ${WELCOME_VIDEO_FILE_ID:-}
+      # Support
+      SUPPORT_USERNAME: ${SUPPORT_USERNAME:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -112,6 +118,12 @@ services:
       # Admin settings
       ADMIN_IDS: ${ADMIN_IDS:-}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      # Subscription settings
+      SUBSCRIPTION_CHANNEL: ${SUBSCRIPTION_CHANNEL:-}
+      SUBSCRIPTION_REQUIRED: ${SUBSCRIPTION_REQUIRED:-true}
+      WELCOME_VIDEO_FILE_ID: ${WELCOME_VIDEO_FILE_ID:-}
+      # Support
+      SUPPORT_USERNAME: ${SUPPORT_USERNAME:-}
     depends_on:
       postgres:
         condition: service_healthy

@@ -77,7 +77,7 @@ class GenerationTask(Base):
     )
     prompt: Mapped[str] = mapped_column(String(2000), nullable=False)
     source_image_url: Mapped[Optional[str]] = mapped_column(
-        String(500), nullable=True
+        String(2000), nullable=True
     )
     result_image_url: Mapped[Optional[str]] = mapped_column(
         String(500), nullable=True

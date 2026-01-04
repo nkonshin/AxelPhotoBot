@@ -64,8 +64,8 @@ ADMIN_HELP_TEXT = """
 /stats — Статистика бота (пользователи, генерации)
 
 👥 <b>Пользователи:</b>
-/userinfo &lt;telegram_id&gt; — Информация о пользователе
-/addtokens &lt;telegram_id&gt; &lt;amount&gt; — Добавить токены
+/userinfo &lt;@username|telegram_id&gt; — Информация о пользователе
+/addtokens &lt;@username|telegram_id&gt; &lt;amount&gt; — Добавить токены
 /resetuser &lt;@username|telegram_id&gt; — Сбросить пользователя
 
 📢 <b>Рассылка:</b>
@@ -230,7 +230,7 @@ async def admin_top_users_callback(callback: CallbackQuery) -> None:
         text = "👥 <b>Топ пользователей</b>\n\nНет данных"
     else:
         users_text = "\n".join([
-            f"{i}. {user.first_name or user.username or user.telegram_id} — {user.task_count} задач"
+            f"{i}. @{user.username or '—'} (<code>{user.telegram_id}</code>) — {user.task_count} задач"
             for i, user in enumerate(top_users, 1)
         ])
         text = f"👥 <b>Топ 10 пользователей</b>\n\n{users_text}"
@@ -300,7 +300,7 @@ async def admin_back_callback(callback: CallbackQuery) -> None:
 
 @router.message(Command("addtokens"))
 async def add_tokens_command(message: Message) -> None:
-    """Add tokens to a user. Usage: /addtokens <telegram_id> <amount>"""
+    """Add tokens to a user. Usage: /addtokens <@username|telegram_id> <amount>"""
     if not config.is_admin(message.from_user.id):
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
@@ -311,16 +311,18 @@ async def add_tokens_command(message: Message) -> None:
     if len(args) != 2:
         await message.answer(
             "❌ <b>Неверный формат</b>\n\n"
-            "Использование: <code>/addtokens &lt;telegram_id&gt; &lt;amount&gt;</code>\n\n"
-            "Пример: <code>/addtokens 123456789 1000</code>"
+            "Использование:\n"
+            "<code>/addtokens @username 100</code>\n"
+            "<code>/addtokens 123456789 100</code>"
         )
         return
     
+    identifier = args[0]
+    
     try:
-        telegram_id = int(args[0])
         amount = int(args[1])
     except ValueError:
-        await message.answer("❌ telegram_id и amount должны быть числами")
+        await message.answer("❌ Количество токенов должно быть числом")
         return
     
     if amount <= 0:
@@ -331,10 +333,20 @@ async def add_tokens_command(message: Message) -> None:
     
     async with session_maker() as session:
         user_repo = UserRepository(session)
-        user = await user_repo.get_by_telegram_id(telegram_id)
+        
+        # Search by username or telegram_id
+        if identifier.startswith("@"):
+            user = await user_repo.get_by_username(identifier[1:])
+        else:
+            try:
+                telegram_id = int(identifier)
+                user = await user_repo.get_by_telegram_id(telegram_id)
+            except ValueError:
+                await message.answer("❌ Неверный формат ID")
+                return
         
         if user is None:
-            await message.answer(f"❌ Пользователь с ID {telegram_id} не найден")
+            await message.answer(f"❌ Пользователь {identifier} не найден")
             return
         
         old_balance = user.tokens
@@ -343,8 +355,9 @@ async def add_tokens_command(message: Message) -> None:
     
     await message.answer(
         f"✅ <b>Токены добавлены</b>\n\n"
-        f"Пользователь: {user.first_name or user.username or telegram_id}\n"
-        f"Telegram ID: <code>{telegram_id}</code>\n"
+        f"Пользователь: {user.first_name or user.username or user.telegram_id}\n"
+        f"Username: @{user.username or '—'}\n"
+        f"Telegram ID: <code>{user.telegram_id}</code>\n"
         f"Было: {old_balance} 🪙\n"
         f"Добавлено: +{amount} 🪙\n"
         f"Стало: {new_balance} 🪙"
@@ -353,7 +366,7 @@ async def add_tokens_command(message: Message) -> None:
 
 @router.message(Command("userinfo"))
 async def user_info_command(message: Message) -> None:
-    """Get user info. Usage: /userinfo <telegram_id>"""
+    """Get user info. Usage: /userinfo <@username|telegram_id>"""
     if not config.is_admin(message.from_user.id):
         await message.answer("❌ У вас нет доступа к этой команде.")
         return
@@ -363,24 +376,32 @@ async def user_info_command(message: Message) -> None:
     if len(args) != 1:
         await message.answer(
             "❌ <b>Неверный формат</b>\n\n"
-            "Использование: <code>/userinfo &lt;telegram_id&gt;</code>"
+            "Использование:\n"
+            "<code>/userinfo @username</code>\n"
+            "<code>/userinfo 123456789</code>"
         )
         return
     
-    try:
-        telegram_id = int(args[0])
-    except ValueError:
-        await message.answer("❌ telegram_id должен быть числом")
-        return
+    identifier = args[0]
     
     session_maker = get_session_maker()
     
     async with session_maker() as session:
         user_repo = UserRepository(session)
-        user = await user_repo.get_by_telegram_id(telegram_id)
+        
+        # Search by username or telegram_id
+        if identifier.startswith("@"):
+            user = await user_repo.get_by_username(identifier[1:])
+        else:
+            try:
+                telegram_id = int(identifier)
+                user = await user_repo.get_by_telegram_id(telegram_id)
+            except ValueError:
+                await message.answer("❌ Неверный формат ID")
+                return
         
         if user is None:
-            await message.answer(f"❌ Пользователь с ID {telegram_id} не найден")
+            await message.answer(f"❌ Пользователь {identifier} не найден")
             return
         
         # Count user's tasks
