@@ -23,12 +23,26 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
     
+    async def get_by_id(self, user_id: int) -> Optional[User]:
+        """Get user by database ID."""
+        result = await self.session.execute(
+            select(User).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()
+    
     async def get_by_username(self, username: str) -> Optional[User]:
         """Get user by Telegram username (without @)."""
         result = await self.session.execute(
             select(User).where(User.username == username)
         )
         return result.scalar_one_or_none()
+    
+    async def get_all_users(self) -> List[User]:
+        """Get all users for broadcast."""
+        result = await self.session.execute(
+            select(User).order_by(User.id)
+        )
+        return list(result.scalars().all())
     
     async def get_or_create(
         self,

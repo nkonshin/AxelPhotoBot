@@ -1,0 +1,4 @@
+# file: /Users/user/Desktop/Work/PetProjects/NanoBananaTgBot/bot/templates/__init__.py
+# hypothesis_version: 6.148.8
+
+['PromptTemplate', 'TEMPLATES', 'get_all_templates', 'get_template_by_id']

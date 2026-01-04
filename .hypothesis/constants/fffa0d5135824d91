@@ -1,0 +1,4 @@
+# file: /Users/user/Desktop/Work/PetProjects/NanoBananaTgBot/bot/db/repositories.py
+# hypothesis_version: 6.148.8
+
+['1024x1024', 'active_users_today', 'gpt-image-1', 'medium', 'model_usage', 'pending', 'task_count', 'tasks_by_status', 'tasks_today', 'total_referrals', 'total_tasks', 'total_tokens_spent', 'total_users', 'users_today']

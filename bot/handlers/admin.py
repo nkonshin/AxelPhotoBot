@@ -3,22 +3,25 @@
 Commands:
 - /admin - Show admin menu
 - /stats - Show bot statistics
-- /broadcast <message> - Send message to all users (TODO)
+- /broadcast - Send message to all users
 - /addtokens <user_id> <amount> - Add tokens to user
 """
 
+import asyncio
 import logging
 from datetime import datetime
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
 
 from bot.config import config
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository, StatsRepository
+from bot.states.admin import BroadcastStates
 
 logger = logging.getLogger(__name__)
 
@@ -562,4 +565,171 @@ async def toggle_subscription_callback(callback: CallbackQuery) -> None:
             f"<i>Новые пользователи {'должны' if new_value else 'не должны'} подписаться на канал для получения токенов.</i>"
         ),
         reply_markup=builder.as_markup(),
+    )
+
+
+
+# ============== Broadcast handlers ==============
+
+@router.message(Command("broadcast"))
+async def broadcast_command(message: Message, state: FSMContext) -> None:
+    """Start broadcast flow."""
+    if not config.is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    
+    await state.set_state(BroadcastStates.waiting_message)
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data="broadcast:cancel",
+        )
+    )
+    
+    await message.answer(
+        "📢 <b>Рассылка сообщений</b>\n\n"
+        "Отправьте сообщение, которое хотите разослать всем пользователям.\n\n"
+        "Поддерживается:\n"
+        "• Текст с форматированием\n"
+        "• Фото с подписью\n"
+        "• Видео с подписью\n\n"
+        "<i>Для отмены нажмите кнопку ниже или отправьте /cancel</i>",
+        reply_markup=builder.as_markup(),
+    )
+
+
+@router.message(Command("cancel"), BroadcastStates.waiting_message)
+@router.message(Command("cancel"), BroadcastStates.confirm_broadcast)
+async def broadcast_cancel_command(message: Message, state: FSMContext) -> None:
+    """Cancel broadcast via command."""
+    await state.clear()
+    await message.answer("❌ Рассылка отменена")
+
+
+@router.callback_query(F.data == "broadcast:cancel")
+async def broadcast_cancel_callback(callback: CallbackQuery, state: FSMContext) -> None:
+    """Cancel broadcast via button."""
+    await state.clear()
+    await callback.message.edit_text("❌ Рассылка отменена")
+    await callback.answer()
+
+
+@router.message(BroadcastStates.waiting_message)
+async def broadcast_receive_message(message: Message, state: FSMContext) -> None:
+    """Receive broadcast message and ask for confirmation."""
+    if not config.is_admin(message.from_user.id):
+        return
+    
+    # Store message info for later
+    await state.update_data(
+        message_id=message.message_id,
+        chat_id=message.chat.id,
+        has_photo=message.photo is not None,
+        has_video=message.video is not None,
+    )
+    
+    await state.set_state(BroadcastStates.confirm_broadcast)
+    
+    # Get user count
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        stats_repo = StatsRepository(session)
+        total_users = await stats_repo.get_total_users()
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="✅ Отправить всем",
+            callback_data="broadcast:confirm",
+        ),
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data="broadcast:cancel",
+        ),
+    )
+    
+    await message.answer(
+        f"📢 <b>Подтверждение рассылки</b>\n\n"
+        f"Сообщение будет отправлено <b>{total_users}</b> пользователям.\n\n"
+        f"Подтвердить отправку?",
+        reply_markup=builder.as_markup(),
+    )
+
+
+@router.callback_query(F.data == "broadcast:confirm", BroadcastStates.confirm_broadcast)
+async def broadcast_confirm(callback: CallbackQuery, state: FSMContext) -> None:
+    """Confirm and execute broadcast."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    data = await state.get_data()
+    await state.clear()
+    
+    message_id = data.get("message_id")
+    chat_id = data.get("chat_id")
+    
+    if not message_id or not chat_id:
+        await callback.message.edit_text("❌ Ошибка: сообщение не найдено")
+        return
+    
+    await callback.message.edit_text("📤 Начинаю рассылку...")
+    
+    # Get all users
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        user_repo = UserRepository(session)
+        users = await user_repo.get_all_users()
+    
+    total = len(users)
+    success = 0
+    failed = 0
+    
+    # Send progress updates every 50 users
+    progress_message = await callback.message.answer(
+        f"📤 Рассылка: 0/{total} (0%)"
+    )
+    
+    from aiogram import Bot
+    bot = Bot(token=config.bot_token)
+    
+    for i, user in enumerate(users):
+        try:
+            await bot.copy_message(
+                chat_id=user.telegram_id,
+                from_chat_id=chat_id,
+                message_id=message_id,
+            )
+            success += 1
+        except Exception as e:
+            failed += 1
+            logger.warning(f"Failed to send broadcast to {user.telegram_id}: {e}")
+        
+        # Update progress every 50 users
+        if (i + 1) % 50 == 0 or (i + 1) == total:
+            percent = (i + 1) * 100 // total
+            try:
+                await progress_message.edit_text(
+                    f"📤 Рассылка: {i + 1}/{total} ({percent}%)\n"
+                    f"✅ Успешно: {success}\n"
+                    f"❌ Ошибок: {failed}"
+                )
+            except Exception:
+                pass
+        
+        # Small delay to avoid rate limits
+        await asyncio.sleep(0.05)
+    
+    await bot.session.close()
+    
+    # Final report
+    await progress_message.edit_text(
+        f"✅ <b>Рассылка завершена!</b>\n\n"
+        f"📊 <b>Итоги:</b>\n"
+        f"  • Всего: {total}\n"
+        f"  • Успешно: {success}\n"
+        f"  • Ошибок: {failed}\n\n"
+        f"<i>Ошибки обычно означают, что пользователь заблокировал бота.</i>"
     )

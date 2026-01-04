@@ -55,6 +55,9 @@ class CallbackData:
     SHOP_PRO = "shop:pro"
     SHOP_VIP = "shop:vip"
     SHOP_CONTACT = "shop:contact"
+    
+    # Gift
+    GIFT = "menu:gift"
 
 
 # Shop packages configuration
@@ -69,13 +72,14 @@ SHOP_PACKAGES = {
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     """
-    Create the main menu keyboard with 6 buttons.
+    Create the main menu keyboard with 7 buttons.
     
     Layout (full width buttons except middle row):
     [🎨 Создать картинку        ]
     [✏️ Редактировать фото      ]
     [🤖 Выбрать модель          ]
     [👤 Личный кабинет] [💰 Купить токены]
+    [🎁 Подарить фотосессию     ]
     [💡 Идеи и тренды           ]
     """
     builder = InlineKeyboardBuilder()
@@ -108,6 +112,13 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text="💰 Купить токены",
             callback_data=CallbackData.TOKENS,
+        ),
+    )
+    # Gift button (full width)
+    builder.row(
+        InlineKeyboardButton(
+            text="🎁 Подарить фотосессию",
+            callback_data=CallbackData.GIFT,
         ),
     )
     # Full width button
