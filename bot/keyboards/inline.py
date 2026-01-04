@@ -410,3 +410,31 @@ def regenerate_keyboard(task_id: int) -> InlineKeyboardMarkup:
     )
     
     return builder.as_markup()
+
+
+def subscription_keyboard(channel: str) -> InlineKeyboardMarkup:
+    """
+    Create keyboard for subscription check.
+    
+    Args:
+        channel: Channel username (e.g., @nkonshin_ai)
+    """
+    builder = InlineKeyboardBuilder()
+    
+    # Remove @ for URL
+    channel_name = channel.replace("@", "")
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="📢 Подписаться на канал",
+            url=f"https://t.me/{channel_name}",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="✅ Я подписался",
+            callback_data="check_subscription",
+        )
+    )
+    
+    return builder.as_markup()

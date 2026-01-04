@@ -25,6 +25,33 @@ logger = logging.getLogger(__name__)
 router = Router(name="admin")
 
 
+# Redis functions for subscription toggle
+async def get_subscription_required() -> bool:
+    """Get subscription requirement status from Redis."""
+    try:
+        import redis.asyncio as redis
+        r = redis.from_url(config.redis_url)
+        value = await r.get("subscription_required")
+        await r.close()
+        if value is None:
+            return config.subscription_required
+        return value.decode() == "true"
+    except Exception as e:
+        logger.error(f"Failed to get subscription_required from Redis: {e}")
+        return config.subscription_required
+
+
+async def set_subscription_required(value: bool) -> None:
+    """Set subscription requirement status in Redis."""
+    try:
+        import redis.asyncio as redis
+        r = redis.from_url(config.redis_url)
+        await r.set("subscription_required", "true" if value else "false")
+        await r.close()
+    except Exception as e:
+        logger.error(f"Failed to set subscription_required in Redis: {e}")
+
+
 # Admin help text
 ADMIN_HELP_TEXT = """
 🔐 <b>Админ-команды</b>
@@ -85,6 +112,10 @@ def admin_menu_keyboard():
         InlineKeyboardButton(
             text="📋 Справка",
             callback_data="admin:help",
+        ),
+        InlineKeyboardButton(
+            text="🔔 Подписка",
+            callback_data="admin:togglesub",
         ),
     )
     
@@ -478,4 +509,57 @@ async def reset_user_command(message: Message) -> None:
         f"  • Модель: {old_model} → gpt-image-1.5\n"
         f"  • Качество: {old_quality} → medium\n"
         f"  • Размер: {old_size} → 1024x1024"
+    )
+
+
+@router.message(Command("togglesub"))
+async def toggle_subscription_command(message: Message) -> None:
+    """Toggle subscription requirement for new users."""
+    if not config.is_admin(message.from_user.id):
+        await message.answer("❌ У вас нет доступа к этой команде.")
+        return
+    
+    current = await get_subscription_required()
+    new_value = not current
+    await set_subscription_required(new_value)
+    
+    status = "✅ включена" if new_value else "❌ выключена"
+    await message.answer(
+        f"🔔 <b>Проверка подписки на канал</b>\n\n"
+        f"Статус: {status}\n"
+        f"Канал: {config.subscription_channel or 'не задан'}\n\n"
+        f"<i>Новые пользователи {'должны' if new_value else 'не должны'} подписаться на канал для получения токенов.</i>"
+    )
+
+
+@router.callback_query(F.data == "admin:togglesub")
+async def toggle_subscription_callback(callback: CallbackQuery) -> None:
+    """Handle toggle subscription button click."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    current = await get_subscription_required()
+    new_value = not current
+    await set_subscription_required(new_value)
+    
+    status = "✅ включена" if new_value else "❌ выключена"
+    await callback.answer(f"Проверка подписки: {status}")
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад",
+            callback_data="admin:back",
+        )
+    )
+    
+    await callback.message.edit_text(
+        text=(
+            f"🔔 <b>Проверка подписки на канал</b>\n\n"
+            f"Статус: {status}\n"
+            f"Канал: {config.subscription_channel or 'не задан'}\n\n"
+            f"<i>Новые пользователи {'должны' if new_value else 'не должны'} подписаться на канал для получения токенов.</i>"
+        ),
+        reply_markup=builder.as_markup(),
     )

@@ -1,0 +1,4 @@
+# file: /Users/user/Desktop/Work/PetProjects/NanoBananaTgBot/bot/db/__init__.py
+# hypothesis_version: 6.148.8
+
+['Base', 'GenerationTask', 'TaskRepository', 'Template', 'User', 'UserRepository', 'close_db', 'get_engine', 'get_session', 'get_session_maker', 'init_db']

@@ -72,6 +72,13 @@ class Config:
     # Support
     support_username: str = ""  # Username поддержки (например @support)
 
+    # Subscription settings
+    subscription_channel: str = ""  # Канал для проверки подписки (@nkonshin_ai)
+    subscription_required: bool = True  # Требовать подписку для новых пользователей
+    
+    # Welcome video
+    welcome_video_file_id: str = ""  # file_id видео-кружка для приветствия
+
     def is_admin(self, telegram_id: int) -> bool:
         """Check if user is admin."""
         return telegram_id in self.admin_ids
@@ -111,6 +118,13 @@ def load_config() -> Config:
 
         # Support
         support_username=os.getenv("SUPPORT_USERNAME", ""),
+
+        # Subscription settings
+        subscription_channel=os.getenv("SUBSCRIPTION_CHANNEL", "@nkonshin_ai"),
+        subscription_required=_parse_bool(os.getenv("SUBSCRIPTION_REQUIRED", "true"), default=True),
+        
+        # Welcome video
+        welcome_video_file_id=os.getenv("WELCOME_VIDEO_FILE_ID", ""),
     )
 
 

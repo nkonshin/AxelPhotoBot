@@ -3,14 +3,15 @@
 import logging
 import re
 
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import CommandStart, CommandObject
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
+from bot.config import config
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository
-from bot.keyboards.inline import main_menu_keyboard
+from bot.keyboards.inline import main_menu_keyboard, subscription_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,37 @@ WELCOME_BACK_MESSAGE = """
 Выбирай действие из меню:
 """
 
+SUBSCRIPTION_MESSAGE = """
+Привет! Я Аксель, твой новый нейро-друг! 😊
+
+Я помогу тебе создавать и улучшать изображения — быстро, просто и профессионально.
+
+🎁 <b>Твой стартовый бонус:</b>
+• 7 токенов генерации
+
+Чтобы активировать бонус, подпишитесь на мой закрытый канал:
+{channel}
+
+<b>В канале:</b>
+• Бесплатные шаблоны и промпты для идеальных фото.
+• Готовые стили, которые мы протестировали за тебя.
+• Разборы удачных генераций и лайфхаки.
+• Обновления и скрытые фичи бота
+
+Канал — это не реклама.
+Это база знаний, которая сэкономит тебе время и деньги.
+"""
+
+SUBSCRIPTION_SUCCESS_MESSAGE = """
+✅ <b>Отлично! Подписка подтверждена!</b>
+
+🎁 Тебе начислено <b>7 бесплатных токенов</b>!
+
+<b>Твой баланс:</b> {tokens} 🪙
+
+Выбирай действие из меню:
+"""
+
 
 def parse_referral_code(args: str | None) -> int | None:
     """Parse referral code from /start arguments.
@@ -59,38 +91,91 @@ def parse_referral_code(args: str | None) -> int | None:
     return None
 
 
-@router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext, command: CommandObject) -> None:
-    """
-    Handle /start command.
+async def check_subscription(bot: Bot, user_id: int, channel: str) -> bool:
+    """Check if user is subscribed to channel.
     
-    - Creates new user if not exists (with initial tokens)
-    - Handles referral links (ref_USERID)
-    - Shows welcome message with main menu
-    - Clears any existing FSM state
+    Args:
+        bot: Bot instance
+        user_id: Telegram user ID
+        channel: Channel username (e.g., @nkonshin_ai)
+    
+    Returns:
+        True if subscribed or on error (fail-open), False if not subscribed
     """
-    # Clear any existing state
+    try:
+        member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except Exception as e:
+        logger.error(f"Failed to check subscription for user {user_id}: {e}")
+        # Fail-open: if we can't check, allow access
+        return True
+
+
+async def get_subscription_required() -> bool:
+    """Get subscription requirement status from Redis.
+    
+    Returns config default if Redis is not available.
+    """
+    try:
+        import redis.asyncio as redis
+        r = redis.from_url(config.redis_url)
+        value = await r.get("subscription_required")
+        await r.close()
+        if value is None:
+            return config.subscription_required
+        return value.decode() == "true"
+    except Exception as e:
+        logger.error(f"Failed to get subscription_required from Redis: {e}")
+        return config.subscription_required
+
+
+@router.message(CommandStart())
+async def cmd_start(message: Message, state: FSMContext, command: CommandObject, bot: Bot) -> None:
+    """Handle /start command."""
     await state.clear()
     
     user_tg = message.from_user
     if user_tg is None:
         return
     
-    # Parse referral code from deep link
     referrer_telegram_id = parse_referral_code(command.args)
     
     session_maker = get_session_maker()
     async with session_maker() as session:
         user_repo = UserRepository(session)
         
-        # Check if referrer exists (if referral code provided)
+        existing_user = await user_repo.get_by_telegram_id(user_tg.id)
+        is_new_user = existing_user is None
+        
+        if is_new_user:
+            subscription_required = await get_subscription_required()
+            
+            if subscription_required and config.subscription_channel:
+                if config.welcome_video_file_id:
+                    try:
+                        await message.answer_video_note(
+                            video_note=config.welcome_video_file_id,
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send welcome video: {e}")
+                
+                is_subscribed = await check_subscription(
+                    bot, user_tg.id, config.subscription_channel
+                )
+                
+                if not is_subscribed:
+                    await message.answer(
+                        text=SUBSCRIPTION_MESSAGE.format(channel=config.subscription_channel),
+                        reply_markup=subscription_keyboard(config.subscription_channel),
+                    )
+                    return
+        
         referrer_id = None
         if referrer_telegram_id and referrer_telegram_id != user_tg.id:
             referrer = await user_repo.get_by_telegram_id(referrer_telegram_id)
             if referrer:
                 referrer_id = referrer.id
         
-        # Get or create user
         user, created = await user_repo.get_or_create(
             telegram_id=user_tg.id,
             username=user_tg.username,
@@ -103,6 +188,16 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
                 f"New user registered: {user_tg.id} (@{user_tg.username})"
                 + (f" referred by {referrer_telegram_id}" if referrer_id else "")
             )
+            
+            subscription_required = await get_subscription_required()
+            if not subscription_required and config.welcome_video_file_id:
+                try:
+                    await message.answer_video_note(
+                        video_note=config.welcome_video_file_id,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send welcome video: {e}")
+            
             text = WELCOME_MESSAGE.format(tokens=user.tokens)
         else:
             logger.info(
@@ -112,5 +207,42 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     
     await message.answer(
         text=text,
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+@router.callback_query(F.data == "check_subscription")
+async def check_subscription_callback(callback: CallbackQuery, bot: Bot) -> None:
+    """Handle subscription check button click."""
+    user_tg = callback.from_user
+    
+    is_subscribed = await check_subscription(
+        bot, user_tg.id, config.subscription_channel
+    )
+    
+    if not is_subscribed:
+        await callback.answer(
+            text="❌ Вы ещё не подписаны на канал",
+            show_alert=True,
+        )
+        return
+    
+    session_maker = get_session_maker()
+    async with session_maker() as session:
+        user_repo = UserRepository(session)
+        
+        user, created = await user_repo.get_or_create(
+            telegram_id=user_tg.id,
+            username=user_tg.username,
+            first_name=user_tg.first_name,
+        )
+        
+        if created:
+            logger.info(f"New user registered after subscription: {user_tg.id}")
+    
+    await callback.answer("✅ Подписка подтверждена!")
+    
+    await callback.message.edit_text(
+        text=SUBSCRIPTION_SUCCESS_MESSAGE.format(tokens=user.tokens),
         reply_markup=main_menu_keyboard(),
     )

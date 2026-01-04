@@ -1,0 +1,4 @@
+# file: /Users/user/Desktop/Work/PetProjects/NanoBananaTgBot/bot/config.py
+# hypothesis_version: 6.148.8
+
+[',', '0', '1', '2', '20', '5', '60', '7', '@nkonshin_ai', 'ADMIN_API_KEY', 'ADMIN_IDS', 'BOT_TOKEN', 'DATABASE_URL', 'DISABLE_WEBHOOK', 'HIGH_COST_THRESHOLD', 'INFO', 'INITIAL_TOKENS', 'LOG_LEVEL', 'OPENAI_API_KEY', 'REDIS_URL', 'SUBSCRIPTION_CHANNEL', 'SUPPORT_USERNAME', 'WEBHOOK_MAX_RETRIES', 'WEBHOOK_SECRET_TOKEN', 'WEBHOOK_URL', 'false', 'n', 'no', 'off', 'on', 'true', 'y', 'yes']
