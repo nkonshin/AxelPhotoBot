@@ -371,6 +371,9 @@ async def _send_result_to_user(
         image_data: URL of the generated image or base64 string
         is_base64: Whether image_data is base64 encoded
     """
+    import time
+    start_time = time.time()
+    
     try:
         from aiogram import Bot
         from aiogram.types import BufferedInputFile
@@ -394,6 +397,9 @@ async def _send_result_to_user(
                 logger.error(f"User {task.user_id} not found for task {task.id}")
                 return None
         
+        db_time = time.time() - start_time
+        logger.info(f"Task {task.id}: DB query took {db_time:.2f}s")
+        
         # Send image to user
         task_type_emoji = "🎨" if task.task_type == "generate" else "✏️"
         task_type_text = "Картинка создана" if task.task_type == "generate" else "Фото отредактировано"
@@ -413,8 +419,19 @@ async def _send_result_to_user(
 
         if is_base64:
             # Decode base64 and send as document
+            decode_start = time.time()
+            logger.info(f"Task {task.id}: Decoding base64 image, size: {len(image_data)} chars")
             image_bytes = base64.b64decode(image_data)
+            decode_time = time.time() - decode_start
+            logger.info(f"Task {task.id}: Decoded to {len(image_bytes)} bytes in {decode_time:.2f}s")
+            
+            buffer_start = time.time()
             document = BufferedInputFile(image_bytes, filename=filename)
+            buffer_time = time.time() - buffer_start
+            logger.info(f"Task {task.id}: BufferedInputFile created in {buffer_time:.2f}s")
+            
+            send_start = time.time()
+            logger.info(f"Task {task.id}: Sending document to user {telegram_id}")
             sent = await bot.send_document(
                 chat_id=telegram_id,
                 document=document,
@@ -422,8 +439,12 @@ async def _send_result_to_user(
                 parse_mode="HTML",
                 reply_markup=result_feedback_keyboard(task.id),
             )
+            send_time = time.time() - send_start
+            logger.info(f"Task {task.id}: Document sent in {send_time:.2f}s")
         else:
             # Send URL as document (Telegram will fetch it)
+            send_start = time.time()
+            logger.info(f"Task {task.id}: Sending URL document to user {telegram_id}")
             sent = await bot.send_document(
                 chat_id=telegram_id,
                 document=image_data,
@@ -431,9 +452,13 @@ async def _send_result_to_user(
                 parse_mode="HTML",
                 reply_markup=result_feedback_keyboard(task.id),
             )
+            send_time = time.time() - send_start
+            logger.info(f"Task {task.id}: URL document sent in {send_time:.2f}s")
 
         file_id = sent.document.file_id if sent and sent.document else None
         
+        total_time = time.time() - start_time
+        logger.info(f"Task {task.id}: Total _send_result_to_user time: {total_time:.2f}s")
         logger.info(f"Result sent to user {telegram_id} for task {task.id}")
         
         await bot.session.close()
