@@ -1,23 +1,31 @@
-telegram_bot_worker | 2026-01-04 22:51:27,100 - bot.tasks.generation - INFO - Processing generation task 14
-telegram_bot_worker | 2026-01-04 22:51:27,334 - bot.tasks.generation - INFO - Task 14 status updated to processing
-telegram_bot_worker | 2026-01-04 22:51:30,727 - bot.services.image_provider - INFO - Editing image with model gpt-image-1.5, prompt: Черно-белый портретный крупный план молодого мужчины с выразительными чертами лица, снятый на темном...
-telegram_bot_worker | 2026-01-04 22:51:31,274 - bot.services.image_provider - INFO - Downloaded image 1 from Telegram: 213035 bytes
-telegram_bot_worker | 2026-01-04 22:51:32,006 - bot.services.image_provider - INFO - Downloaded image 2 from Telegram: 217255 bytes
-telegram_bot_worker | 2026-01-04 22:51:32,685 - bot.services.image_provider - INFO - Downloaded image 3 from Telegram: 87771 bytes
-telegram_bot_db | 2026-01-04 22:51:33.413 UTC [25] LOG:  checkpoint starting: time
-telegram_bot_worker | 2026-01-04 22:51:33,365 - bot.services.image_provider - INFO - Downloaded image 4 from Telegram: 79051 bytes
-telegram_bot_db | 2026-01-04 22:51:34.817 UTC [25] LOG:  checkpoint complete: wrote 15 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.323 s, sync=0.024 s, total=1.403 s; sync files=14, longest=0.011 s, average=0.002 s; distance=19 kB, estimate=19 kB
-telegram_bot_worker | 2026-01-04 22:51:34,875 - bot.services.image_provider - INFO - Downloaded image 5 from Telegram: 2290802 bytes
-telegram_bot_worker | 2026-01-04 22:51:35,234 - bot.services.image_provider - INFO - Sending 5 image(s) to OpenAI edit endpoint
-telegram_bot_worker | 2026-01-04 22:52:17,068 - httpx - INFO - HTTP Request: POST https://api.openai.com/v1/images/edits "HTTP/1.1 200 OK"
-telegram_bot_worker | 2026-01-04 22:52:17,318 - bot.services.image_provider - INFO - Image edited successfully (base64)
-telegram_bot_worker | 2026-01-04 22:53:18,151 - bot.tasks.generation - INFO - Result sent to user 7260706461 for task 14
-telegram_bot_worker | 2026-01-04 22:53:31,070 - bot.tasks.generation - INFO - Task 14 completed successfully (API tokens: 1584)
-telegram_bot_worker | 2026-01-04 22:53:31,175 - rq.worker - INFO - Successfully completed bot.tasks.generation.process_generation_task(14) job in 0:02:05.229464s on worker 068109a97bfd4a91a3056f8a640b1ac8
-telegram_bot_worker | 2026-01-04 22:53:31,176 - rq.worker - INFO - default: Job OK (9e8fbb4b-1e25-43e3-8326-014455f9bfd7)
-telegram_bot_worker | 2026-01-04 22:53:31,176 - rq.worker - INFO - Result is kept for 500 seconds
-telegram_bot_redis | 1:M 04 Jan 2026 22:53:31.267 * 100 changes in 300 seconds. Saving...
-telegram_bot_redis | 1:M 04 Jan 2026 22:53:31.268 * Background saving started by pid 217
-telegram_bot_redis | 217:C 04 Jan 2026 22:53:31.285 * DB saved on disk
-telegram_bot_redis | 217:C 04 Jan 2026 22:53:31.287 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
-telegram_bot_redis | 1:M 04 Jan 2026 22:53:31.369 * Background saving terminated with success
+telegram_bot_app | INFO:     172.18.0.1:34038 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 23:54:55,556 - aiogram.event - INFO - Update id=37542591 is handled. Duration 2 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:34054 - "GET /wordpress/wp-admin/setup-config.php HTTP/1.0" 404 Not Found
+telegram_bot_app | 2026-01-04 23:55:05,464 - bot.handlers.start - INFO - Existing user started bot: 8318289766 (@AxelPhotoSupport)
+telegram_bot_app | 2026-01-04 23:55:05,626 - aiogram.event - INFO - Update id=37542592 is handled. Duration 185 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:56586 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:56588 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 23:55:07,740 - aiogram.event - INFO - Update id=37542593 is handled. Duration 121 ms by bot id=8539621814
+telegram_bot_app | 2026-01-04 23:55:15,716 - aiogram.event - INFO - Update id=37542594 is handled. Duration 0 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:41332 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 23:55:32,193 - bot.handlers.start - INFO - Existing user started bot: 208210577 (@nkonshin)
+telegram_bot_app | 2026-01-04 23:55:32,356 - aiogram.event - INFO - Update id=37542595 is handled. Duration 170 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:53456 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 23:55:38,234 - aiogram.event - INFO - Update id=37542596 is handled. Duration 127 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:53462 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 23:55:49,182 - bot.handlers.admin - INFO - Admin 208210577 sent photo, file_id: AgACAgIAAxkBAAPRaVr-BS85CYPuAS74Sw5A2zHeuGMAAgQUaxvVw9lKMB6i2IRMQmgBAAMCAAN5AAM4BA
+telegram_bot_app | 2026-01-04 23:55:49,253 - aiogram.event - INFO - Update id=37542597 is handled. Duration 71 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:56130 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:56260 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 23:56:07,420 - aiogram.event - INFO - Update id=37542598 is not handled. Duration 5 ms by bot id=8539621814
+telegram_bot_app | 2026-01-04 23:56:11,976 - bot.handlers.start - INFO - Existing user started bot: 1970630496 (@prettyflacko17)
+telegram_bot_app | 2026-01-04 23:56:12,127 - aiogram.event - INFO - Update id=37542599 is handled. Duration 159 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:56854 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | 2026-01-04 23:56:14,300 - aiogram.event - INFO - Update id=37542600 is handled. Duration 116 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:56866 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:56870 - "POST / HTTP/1.0" 405 Method Not Allowed
+telegram_bot_app | INFO:     172.18.0.1:56884 - "POST /index.php HTTP/1.0" 404 Not Found
+telegram_bot_app | 2026-01-04 23:56:18,908 - aiogram.event - INFO - Update id=37542601 is handled. Duration 1 ms by bot id=8539621814
+telegram_bot_app | INFO:     172.18.0.1:56896 - "POST /webhook HTTP/1.0" 200 OK
+telegram_bot_app | INFO:     172.18.0.1:56898 - "POST /admin HTTP/1.0" 404 Not Found
+telegram_bot_app | INFO:     172.18.0.1:56912 - "POST /api HTTP/1.0" 404 Not Found

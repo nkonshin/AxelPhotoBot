@@ -778,9 +778,15 @@ async def handle_video_note_file_id(message: Message) -> None:
 
 
 @router.message(F.photo)
-async def handle_photo_file_id(message: Message) -> None:
-    """Show file_id for photos sent by admins."""
+async def handle_photo_file_id(message: Message, state: FSMContext) -> None:
+    """Show file_id for photos sent by admins (only when not in FSM state)."""
     if not config.is_admin(message.from_user.id):
+        return
+    
+    # Check if user is in any FSM state (editing, generating, etc.)
+    current_state = await state.get_state()
+    if current_state is not None:
+        # User is in FSM flow, don't intercept
         return
     
     # Get the largest photo
@@ -798,9 +804,15 @@ async def handle_photo_file_id(message: Message) -> None:
 
 
 @router.message(F.video)
-async def handle_video_file_id(message: Message) -> None:
-    """Show file_id for videos sent by admins."""
+async def handle_video_file_id(message: Message, state: FSMContext) -> None:
+    """Show file_id for videos sent by admins (only when not in FSM state)."""
     if not config.is_admin(message.from_user.id):
+        return
+    
+    # Check if user is in any FSM state
+    current_state = await state.get_state()
+    if current_state is not None:
+        # User is in FSM flow, don't intercept
         return
     
     file_id = message.video.file_id
@@ -817,9 +829,15 @@ async def handle_video_file_id(message: Message) -> None:
 
 
 @router.message(F.document)
-async def handle_document_file_id(message: Message) -> None:
-    """Show file_id for documents sent by admins."""
+async def handle_document_file_id(message: Message, state: FSMContext) -> None:
+    """Show file_id for documents sent by admins (only when not in FSM state)."""
     if not config.is_admin(message.from_user.id):
+        return
+    
+    # Check if user is in any FSM state
+    current_state = await state.get_state()
+    if current_state is not None:
+        # User is in FSM flow, don't intercept
         return
     
     file_id = message.document.file_id
