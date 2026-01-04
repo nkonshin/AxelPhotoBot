@@ -754,3 +754,82 @@ async def broadcast_confirm(callback: CallbackQuery, state: FSMContext) -> None:
         f"  • Ошибок: {failed}\n\n"
         f"<i>Ошибки обычно означают, что пользователь заблокировал бота.</i>"
     )
+
+
+# ============== File ID helper for admins ==============
+
+@router.message(F.video_note)
+async def handle_video_note_file_id(message: Message) -> None:
+    """Show file_id for video notes sent by admins."""
+    if not config.is_admin(message.from_user.id):
+        return
+    
+    file_id = message.video_note.file_id
+    
+    logger.info(f"Admin {message.from_user.id} sent video_note, file_id: {file_id}")
+    
+    await message.answer(
+        f"📹 <b>Video Note File ID:</b>\n\n"
+        f"<code>{file_id}</code>\n\n"
+        f"Добавь в .env:\n"
+        f"<code>WELCOME_VIDEO_FILE_ID={file_id}</code>",
+        parse_mode="HTML"
+    )
+
+
+@router.message(F.photo)
+async def handle_photo_file_id(message: Message) -> None:
+    """Show file_id for photos sent by admins."""
+    if not config.is_admin(message.from_user.id):
+        return
+    
+    # Get the largest photo
+    photo = message.photo[-1]
+    file_id = photo.file_id
+    
+    logger.info(f"Admin {message.from_user.id} sent photo, file_id: {file_id}")
+    
+    await message.answer(
+        f"🖼 <b>Photo File ID:</b>\n\n"
+        f"<code>{file_id}</code>\n\n"
+        f"Размер: {photo.width}x{photo.height}",
+        parse_mode="HTML"
+    )
+
+
+@router.message(F.video)
+async def handle_video_file_id(message: Message) -> None:
+    """Show file_id for videos sent by admins."""
+    if not config.is_admin(message.from_user.id):
+        return
+    
+    file_id = message.video.file_id
+    
+    logger.info(f"Admin {message.from_user.id} sent video, file_id: {file_id}")
+    
+    await message.answer(
+        f"🎥 <b>Video File ID:</b>\n\n"
+        f"<code>{file_id}</code>\n\n"
+        f"Размер: {message.video.width}x{message.video.height}\n"
+        f"Длительность: {message.video.duration}s",
+        parse_mode="HTML"
+    )
+
+
+@router.message(F.document)
+async def handle_document_file_id(message: Message) -> None:
+    """Show file_id for documents sent by admins."""
+    if not config.is_admin(message.from_user.id):
+        return
+    
+    file_id = message.document.file_id
+    file_name = message.document.file_name or "unknown"
+    
+    logger.info(f"Admin {message.from_user.id} sent document, file_id: {file_id}")
+    
+    await message.answer(
+        f"📄 <b>Document File ID:</b>\n\n"
+        f"<code>{file_id}</code>\n\n"
+        f"Имя: {file_name}",
+        parse_mode="HTML"
+    )
