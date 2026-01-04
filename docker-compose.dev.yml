@@ -1,33 +1,41 @@
-version: '3.8'
-
 # Development override for docker-compose.yml
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
+version: '3.8'
+
 services:
   app:
-    command: >
-      sh -c "
-        echo 'Waiting for database...' &&
-        sleep 5 &&
-        echo 'Running migrations...' &&
-        alembic upgrade head &&
-        echo 'Starting FastAPI server with hot-reload...' &&
-        uvicorn bot.main:app --host 0.0.0.0 --port 8000 --reload
-      "
+    # Don't rebuild - use existing image
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    # Mount code as volume for instant updates
     volumes:
       - ./bot:/app/bot
       - ./alembic:/app/alembic
-      - ./tests:/app/tests
+      - ./worker.py:/app/worker.py
+      - ./requirements.txt:/app/requirements.txt
+    # Enable hot reload
+    command: >
+      sh -c "
+        echo 'Development mode - hot reload enabled' &&
+        sleep 5 &&
+        alembic upgrade head &&
+        uvicorn bot.main:app --host 0.0.0.0 --port 8000 --reload
+      "
     environment:
-      - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=DEBUG
-      - USE_REDIS_FSM_STORAGE=0
+      LOG_LEVEL: DEBUG
 
   worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
     volumes:
       - ./bot:/app/bot
-      - ./tests:/app/tests
+      - ./worker.py:/app/worker.py
+      - ./requirements.txt:/app/requirements.txt
+    # Worker will auto-restart on code changes via restart policy
     environment:
-      - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=DEBUG
-      - USE_REDIS_FSM_STORAGE=0
+      LOG_LEVEL: DEBUG

@@ -174,6 +174,26 @@ docker system df
 
 ## Обновление
 
+### Быстрый способ (рекомендуется) ⚡
+
+Без пересборки Docker — занимает 5-10 секунд:
+
+```bash
+# На сервере
+cd NanoBananaTgBot
+./deploy.sh
+```
+
+Или вручную:
+```bash
+git pull
+docker-compose restart app worker
+```
+
+**Подробнее:** [FAST_DEPLOY.md](Manuals/FAST_DEPLOY.md)
+
+### Полная пересборка (только при изменении requirements.txt)
+
 ```bash
 # Остановите сервисы
 docker-compose down

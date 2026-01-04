@@ -40,6 +40,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     container_name: telegram_bot_app
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
@@ -95,6 +96,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     container_name: telegram_bot_worker
     environment:
       BOT_TOKEN: ${BOT_TOKEN}

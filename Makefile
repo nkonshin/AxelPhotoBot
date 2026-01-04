@@ -1,7 +1,24 @@
-.PHONY: help build up down restart logs shell test clean migrate
+.PHONY: help build up down restart logs shell test clean migrate deploy
 
 help: ## Показать эту справку
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+# === Быстрый деплой ===
+
+deploy: ## 🚀 Быстрый деплой без пересборки (5-10 сек)
+	@echo "🚀 Быстрый деплой..."
+	@git pull
+	@docker-compose restart app worker
+	@echo "✅ Деплой завершён!"
+
+deploy-migrate: ## 🚀 Быстрый деплой с миграциями
+	@echo "🚀 Деплой с миграциями..."
+	@git pull
+	@docker-compose exec app alembic upgrade head
+	@docker-compose restart app worker
+	@echo "✅ Деплой завершён!"
+
+# === Основные команды ===
 
 build: ## Собрать Docker образы
 	docker-compose build
@@ -14,6 +31,12 @@ down: ## Остановить все сервисы
 
 restart: ## Перезапустить все сервисы
 	docker-compose restart
+
+restart-app: ## Перезапустить только app
+	docker-compose restart app
+
+restart-worker: ## Перезапустить только worker
+	docker-compose restart worker
 
 logs: ## Показать логи всех сервисов
 	docker-compose logs -f
@@ -48,8 +71,10 @@ clean: ## Остановить и удалить контейнеры, сети,
 ps: ## Показать статус сервисов
 	docker-compose ps
 
-rebuild: ## Пересобрать образы без кэша
+rebuild: ## Пересобрать образы без кэша (только при изменении requirements.txt)
+	docker-compose down
 	docker-compose build --no-cache
+	docker-compose up -d
 
 dev: ## Запустить в режиме разработки (с hot-reload)
 	docker-compose -f docker-compose.yml -f docker-compose.dev.yml up

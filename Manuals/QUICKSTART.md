@@ -121,7 +121,8 @@ docker-compose ps
 ## Что дальше?
 
 - 📖 Полная документация: [README.md](../README.md)
-- 🚀 Production deployment: [DEPLOYMENT.md](DEPLOYMENT.md)
+- 🚀 Быстрый деплой: [FAST_DEPLOY.md](FAST_DEPLOY.md)
+- 🏭 Production deployment: [DEPLOYMENT.md](DEPLOYMENT.md)
 - 🛠️ Developer Guide: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
 - 📝 Changelog: [CHANGELOG_IMPROVEMENTS.md](CHANGELOG_IMPROVEMENTS.md)
 - 🧪 Запуск тестов: `make test`
