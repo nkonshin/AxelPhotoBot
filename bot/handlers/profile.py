@@ -13,6 +13,7 @@ from bot.keyboards.inline import (
     CallbackData,
     main_menu_keyboard,
 )
+from bot.services.image_tokens import IMAGE_QUALITY_LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,9 @@ async def show_profile(callback: CallbackQuery) -> None:
         total_generations = len(history)
         successful_generations = sum(1 for t in history if t.status == "done")
     
+    # Format quality label
+    quality_label = IMAGE_QUALITY_LABELS.get(user.image_quality, user.image_quality)
+    
     # Build profile message
     text = (
         f"👤 <b>Личный кабинет</b>\n\n"
@@ -80,7 +84,7 @@ async def show_profile(callback: CallbackQuery) -> None:
         f"<b>Всего генераций:</b> {total_generations}\n"
         f"<b>Успешных:</b> {successful_generations}\n"
         f"<b>Модель:</b> {user.selected_model}\n"
-        f"<b>Качество:</b> {user.image_quality}\n"
+        f"<b>Качество:</b> {quality_label}\n"
         f"<b>Формат:</b> {user.image_size}\n\n"
     )
     

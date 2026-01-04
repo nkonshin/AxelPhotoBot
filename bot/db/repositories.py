@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import config
 from bot.db.models import User, GenerationTask
-from bot.services.image_tokens import estimate_image_tokens
 
 
 class UserRepository:
@@ -47,15 +46,14 @@ class UserRepository:
         
         if user is not None:
             return user, False
-        
-        default_image_tokens = estimate_image_tokens("medium", "1024x1024")
 
-        # Create new user with initial tokens
+        # Create new user with initial tokens (7 free tokens)
         user = User(
             telegram_id=telegram_id,
             username=username,
             first_name=first_name,
-            tokens=config.initial_tokens * default_image_tokens,
+            tokens=config.initial_tokens,
+            api_tokens_spent=0,
             referrer_id=referrer_id,
         )
         self.session.add(user)
@@ -179,6 +177,7 @@ class TaskRepository:
         image_quality: str = "medium",
         image_size: str = "1024x1024",
         source_image_url: Optional[str] = None,
+        images_count: int = 1,
     ) -> GenerationTask:
         """
         Create a new generation task.
@@ -187,8 +186,12 @@ class TaskRepository:
             user_id: User's database ID
             task_type: "generate" or "edit"
             prompt: Text prompt for generation
-            tokens_spent: Number of tokens spent
+            tokens_spent: Number of tokens spent (user tokens)
+            model: Model name
+            image_quality: Quality setting
+            image_size: Size setting
             source_image_url: Source image URL for edit tasks
+            images_count: Number of input images (for edit tasks)
         
         Returns:
             Created GenerationTask
@@ -202,6 +205,7 @@ class TaskRepository:
             prompt=prompt,
             tokens_spent=tokens_spent,
             source_image_url=source_image_url,
+            images_count=images_count,
             status="pending",
         )
         self.session.add(task)
@@ -218,6 +222,7 @@ class TaskRepository:
         result_file_id: Optional[str] = None,
         error_message: Optional[str] = None,
         increment_retry: bool = False,
+        api_tokens_spent: Optional[int] = None,
     ) -> Optional[GenerationTask]:
         """
         Update task status and related fields.
@@ -226,8 +231,10 @@ class TaskRepository:
             task_id: Task's database ID
             status: New status ("pending", "processing", "done", "failed")
             result_image_url: URL of generated image (for "done" status)
+            result_file_id: Telegram file_id of result
             error_message: Error message (for "failed" status)
             increment_retry: Whether to increment retry count
+            api_tokens_spent: API tokens used (for admin tracking)
         
         Returns:
             Updated task or None if not found
@@ -253,6 +260,9 @@ class TaskRepository:
         
         if increment_retry:
             task.retry_count += 1
+        
+        if api_tokens_spent is not None:
+            task.api_tokens_spent = api_tokens_spent
         
         await self.session.commit()
         await self.session.refresh(task)

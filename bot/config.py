@@ -85,7 +85,7 @@ def load_config() -> Config:
         database_url=os.getenv("DATABASE_URL", ""),
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-        initial_tokens=int(os.getenv("INITIAL_TOKENS", "10")),
+        initial_tokens=int(os.getenv("INITIAL_TOKENS", "7")),
 
         log_level=os.getenv("LOG_LEVEL", "INFO"),
 
@@ -102,7 +102,7 @@ def load_config() -> Config:
         use_redis_fsm_storage=_parse_bool(os.getenv("USE_REDIS_FSM_STORAGE", "0"), default=False),
 
         # Generation settings
-        high_cost_threshold=int(os.getenv("HIGH_COST_THRESHOLD", "4000")),
+        high_cost_threshold=int(os.getenv("HIGH_COST_THRESHOLD", "20")),
         max_tasks_per_user_per_hour=int(os.getenv("MAX_TASKS_PER_USER_PER_HOUR", "20")),
 
         # Admin settings

@@ -42,6 +42,24 @@ class CallbackData:
     
     # Regenerate
     REGENERATE_PREFIX = "regen:"
+    
+    # Shop packages
+    SHOP_STARTER = "shop:starter"
+    SHOP_SMALL = "shop:small"
+    SHOP_MEDIUM = "shop:medium"
+    SHOP_PRO = "shop:pro"
+    SHOP_VIP = "shop:vip"
+    SHOP_CONTACT = "shop:contact"
+
+
+# Shop packages configuration
+SHOP_PACKAGES = {
+    "starter": {"name": "🐣 Starter", "tokens": 10, "price": 99},
+    "small": {"name": "✨ Small", "tokens": 50, "price": 249},
+    "medium": {"name": "🔥 Medium", "tokens": 120, "price": 449},
+    "pro": {"name": "😎 Pro", "tokens": 300, "price": 890},
+    "vip": {"name": "👑 Vip", "tokens": 700, "price": 1690},
+}
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -216,7 +234,7 @@ def back_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def model_keyboard(current_model: str = "gpt-image-1") -> InlineKeyboardMarkup:
+def model_keyboard(current_model: str = "gpt-image-1.5") -> InlineKeyboardMarkup:
     """
     Create model selection keyboard.
     
@@ -224,22 +242,21 @@ def model_keyboard(current_model: str = "gpt-image-1") -> InlineKeyboardMarkup:
         current_model: Currently selected model
     
     Layout:
-    [GPT Image 1 ✓] or [GPT Image 1]
-    [GPT Image 1.5 ✓] or [GPT Image 1.5]
+    [GPT Image 1 (устаревшая) - disabled]
+    [GPT Image 1.5 ✓]
     [◀️ Назад в меню]
     """
     builder = InlineKeyboardBuilder()
     
-    # GPT Image 1
-    gpt1_text = "✅ GPT Image 1 (Стандартная)" if current_model == "gpt-image-1" else "GPT Image 1 (Стандартная)"
+    # GPT Image 1 - disabled (показываем но не даём выбрать)
     builder.row(
         InlineKeyboardButton(
-            text=gpt1_text,
-            callback_data="model:gpt-image-1",
+            text="🚫 GPT Image 1 (устаревшая)",
+            callback_data="model:disabled",
         )
     )
     
-    # GPT Image 1.5
+    # GPT Image 1.5 - active
     gpt15_text = "✅ GPT Image 1.5 (Улучшенная)" if current_model == "gpt-image-1.5" else "GPT Image 1.5 (Улучшенная)"
     builder.row(
         InlineKeyboardButton(
@@ -260,19 +277,83 @@ def model_keyboard(current_model: str = "gpt-image-1") -> InlineKeyboardMarkup:
 
 def tokens_keyboard() -> InlineKeyboardMarkup:
     """
-    Create tokens purchase keyboard (placeholder).
+    Create tokens purchase keyboard with shop packages.
     
     Layout:
-    [🔜 Оплата скоро будет доступна]
+    [🐣 Starter] [✨ Small]
+    [🔥 Medium]  [😎 Pro]
+    [👑 Vip                ]
+    [📞 Связаться с менеджером]
+    [◀️ Назад в меню]
+    """
+    builder = InlineKeyboardBuilder()
+    
+    # Row 1: Starter + Small
+    builder.row(
+        InlineKeyboardButton(
+            text="🐣 Starter",
+            callback_data=CallbackData.SHOP_STARTER,
+        ),
+        InlineKeyboardButton(
+            text="✨ Small",
+            callback_data=CallbackData.SHOP_SMALL,
+        ),
+    )
+    
+    # Row 2: Medium + Pro
+    builder.row(
+        InlineKeyboardButton(
+            text="🔥 Medium",
+            callback_data=CallbackData.SHOP_MEDIUM,
+        ),
+        InlineKeyboardButton(
+            text="😎 Pro",
+            callback_data=CallbackData.SHOP_PRO,
+        ),
+    )
+    
+    # Row 3: VIP (full width)
+    builder.row(
+        InlineKeyboardButton(
+            text="👑 Vip",
+            callback_data=CallbackData.SHOP_VIP,
+        ),
+    )
+    
+    # Row 4: Contact manager
+    builder.row(
+        InlineKeyboardButton(
+            text="📞 Связаться с менеджером",
+            callback_data=CallbackData.SHOP_CONTACT,
+        ),
+    )
+    
+    # Row 5: Back to menu
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад в меню",
+            callback_data=CallbackData.BACK_TO_MENU,
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def insufficient_balance_keyboard() -> InlineKeyboardMarkup:
+    """
+    Create keyboard for insufficient balance message.
+    
+    Layout:
+    [💰 Перейти в магазин]
     [◀️ Назад в меню]
     """
     builder = InlineKeyboardBuilder()
     
     builder.row(
         InlineKeyboardButton(
-            text="🔜 Оплата скоро будет доступна",
-            callback_data="tokens:coming_soon",
-        )
+            text="💰 Перейти в магазин",
+            callback_data=CallbackData.TOKENS,
+        ),
     )
     builder.row(
         InlineKeyboardButton(

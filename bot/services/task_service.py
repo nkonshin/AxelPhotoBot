@@ -12,7 +12,7 @@ from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository, TaskRepository
 from bot.db.models import GenerationTask
 from bot.services.balance import BalanceService, InsufficientBalanceError
-from bot.services.image_tokens import estimate_image_tokens
+from bot.services.image_tokens import estimate_image_tokens, calculate_total_cost
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ async def calculate_task_cost(
     quality: str,
     size: str,
     multiplier: int = 1,
+    images_count: int = 1,
 ) -> int:
     """
     Calculate the cost of a task.
@@ -41,11 +42,13 @@ async def calculate_task_cost(
         quality: Image quality (low, medium, high)
         size: Image size (1024x1024, etc.)
         multiplier: Cost multiplier (e.g., for templates)
+        images_count: Number of input images (for edit tasks)
     
     Returns:
         Total cost in tokens
     """
-    return estimate_image_tokens(quality, size) * multiplier
+    base_cost = calculate_total_cost(quality, images_count)
+    return base_cost * multiplier
 
 
 async def create_and_enqueue_task(
@@ -58,6 +61,7 @@ async def create_and_enqueue_task(
     model: str,
     source_image_url: Optional[str] = None,
     cost_multiplier: int = 1,
+    images_count: int = 1,
 ) -> TaskCreationResult:
     """
     Create a generation task and enqueue it for processing.
@@ -77,11 +81,12 @@ async def create_and_enqueue_task(
         model: Model name
         source_image_url: Source image for edit tasks (file_id or URL)
         cost_multiplier: Multiplier for cost (e.g., template cost)
+        images_count: Number of input images (for edit tasks)
     
     Returns:
         TaskCreationResult with success status and task or error info
     """
-    cost = await calculate_task_cost(quality, size, cost_multiplier)
+    cost = await calculate_task_cost(quality, size, cost_multiplier, images_count)
     
     session_maker = get_session_maker()
     
@@ -126,6 +131,7 @@ async def create_and_enqueue_task(
                 image_quality=quality,
                 image_size=size,
                 source_image_url=source_image_url,
+                images_count=images_count,
             )
             
             logger.info(f"Created {task_type} task {task.id} for user {user_id}")
@@ -156,10 +162,10 @@ async def create_and_enqueue_task(
 def build_insufficient_balance_text(required: int, available: int) -> str:
     """Build error message for insufficient balance."""
     return (
-        f"❌ <b>Недостаточно токенов</b>\n\n"
+        "Ой! Кажется, токены закончились 📸\n\n"
         f"Требуется: {required} 🪙\n"
         f"Ваш баланс: {available} 🪙\n\n"
-        "Пополните баланс в разделе «Купить токены»"
+        "Пополни баланс в магазине, чтобы продолжить! 👾"
     )
 
 

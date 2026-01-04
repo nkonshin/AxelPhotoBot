@@ -10,12 +10,20 @@ from bot.config import config
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository, TaskRepository
 from bot.services.balance import BalanceService, InsufficientBalanceError
-from bot.services.image_tokens import estimate_image_tokens, is_valid_quality, is_valid_size
+from bot.services.image_tokens import (
+    estimate_image_tokens,
+    calculate_total_cost,
+    calculate_extra_images_cost,
+    is_valid_quality,
+    is_valid_size,
+    IMAGE_QUALITY_LABELS,
+)
 from bot.keyboards.inline import (
     CallbackData,
     image_settings_confirm_keyboard,
     back_keyboard,
     main_menu_keyboard,
+    insufficient_balance_keyboard,
 )
 from bot.states.generation import EditStates
 
@@ -84,17 +92,19 @@ async def handle_reply_to_edit(message: Message, state: FSMContext) -> None:
         size = user.image_size
         model = user.selected_model
     
-    cost = estimate_image_tokens(quality, size)
+    cost = calculate_total_cost(quality, images_count=1)
     
     # Save to state
     await state.update_data(
         source_file_id=file_id,
+        source_file_ids=[file_id],
         user_id=user.id,
         prompt=prompt,
         image_quality=quality,
         image_size=size,
         model=model,
         expensive_confirmed=False,
+        images_count=1,
     )
     await state.set_state(EditStates.confirm_edit)
     
@@ -120,15 +130,27 @@ def _build_confirmation_text(
     size: str,
     model: str,
     second_confirm: bool = False,
+    images_count: int = 1,
 ) -> str:
     prompt_preview = prompt[:500] + "..." if len(prompt) > 500 else prompt
     confirm_line = "Подтвердить редактирование ещё раз?" if second_confirm else "Подтвердить редактирование?"
+    quality_label = IMAGE_QUALITY_LABELS.get(quality, quality)
+    
+    # Show extra cost info if multiple images
+    images_info = ""
+    if images_count > 1:
+        extra_cost = calculate_extra_images_cost(images_count)
+        if extra_cost > 0:
+            images_info = f"\n<b>Изображений:</b> {images_count} (+{extra_cost} 🪙)"
+        else:
+            images_info = f"\n<b>Изображений:</b> {images_count}"
+    
     return (
         f"✏️ <b>Подтверждение редактирования</b>\n\n"
         f"<b>Описание изменений:</b>\n<i>{prompt_preview}</i>\n\n"
         f"<b>Модель:</b> {model}\n"
-        f"<b>Качество:</b> {quality}\n"
-        f"<b>Формат:</b> {size}\n\n"
+        f"<b>Качество:</b> {quality_label}\n"
+        f"<b>Формат:</b> {size}{images_info}\n\n"
         f"<b>Стоимость:</b> {cost} 🪙\n"
         f"<b>Ваш баланс:</b> {balance} 🪙\n"
         f"<b>После редактирования:</b> {balance - cost} 🪙\n\n"
@@ -141,8 +163,6 @@ SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 # Maximum number of images for edit
 MAX_EDIT_IMAGES = 10
-# Extra cost per additional image (10%)
-EXTRA_IMAGE_COST_PERCENT = 10
 
 
 def _build_photo_received_text(photos_count: int, max_photos: int = MAX_EDIT_IMAGES) -> str:
@@ -150,9 +170,9 @@ def _build_photo_received_text(photos_count: int, max_photos: int = MAX_EDIT_IMA
     header = f"✅ Фото получено! ({photos_count}/{max_photos})" if photos_count == 1 else f"✅ Получено фото: {photos_count}/{max_photos}"
     
     extra_cost_info = ""
-    if photos_count > 1:
-        extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
-        extra_cost_info = f"\n💰 <i>Доп. стоимость за {photos_count - 1} фото: +{extra_percent}%</i>\n"
+    extra_cost = calculate_extra_images_cost(photos_count)
+    if extra_cost > 0:
+        extra_cost_info = f"\n💰 <i>Доп. стоимость за фото: +{extra_cost} 🪙</i>\n"
     
     return (
         f"{header}\n\n"
@@ -424,11 +444,9 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
         size = user.image_size
         model = user.selected_model
 
-    # Calculate cost with extra for multiple images
-    base_cost = estimate_image_tokens(quality, size)
-    extra_images = max(0, len(source_file_ids) - 1)
-    extra_cost = int(base_cost * extra_images * EXTRA_IMAGE_COST_PERCENT / 100)
-    cost = base_cost + extra_cost
+    # Calculate cost with new token system
+    images_count = len(source_file_ids)
+    cost = calculate_total_cost(quality, images_count)
 
     # Save prompt to state
     await state.update_data(
@@ -438,14 +456,9 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
         model=model,
         expensive_confirmed=False,
         source_file_ids=source_file_ids,
-        images_count=len(source_file_ids),
+        images_count=images_count,
     )
     await state.set_state(EditStates.confirm_edit)
-    
-    # Build confirmation text with multi-image info
-    images_info = ""
-    if len(source_file_ids) > 1:
-        images_info = f"\n<b>Изображений:</b> {len(source_file_ids)} (+{extra_images * EXTRA_IMAGE_COST_PERCENT}% к стоимости)"
     
     # Show confirmation
     await message.answer(
@@ -456,7 +469,8 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
             quality=quality,
             size=size,
             model=model,
-        ) + images_info,
+            images_count=images_count,
+        ),
         reply_markup=image_settings_confirm_keyboard(quality, size),
     )
 
@@ -502,22 +516,34 @@ async def process_additional_photo(message: Message, state: FSMContext) -> None:
         source_file_ids = data.get("source_file_ids", [])
     
     photos_count = len(source_file_ids)
-    extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
+    extra_cost = calculate_extra_images_cost(photos_count)
     
     # Use different text for batch vs single photo
     if current_media_group_id:
         added_count = photos_count - (len(data.get("source_file_ids", [])) - 1) if data else 1
-        text = (
-            f"✅ <b>Добавлено фото!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
-            f"💰 <i>Доп. стоимость: +{extra_percent}%</i>\n\n"
-            "Отправьте описание изменений или добавьте ещё фото."
-        )
+        if extra_cost > 0:
+            text = (
+                f"✅ <b>Добавлено фото!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+                f"💰 <i>Доп. стоимость: +{extra_cost} 🪙</i>\n\n"
+                "Отправьте описание изменений или добавьте ещё фото."
+            )
+        else:
+            text = (
+                f"✅ <b>Добавлено фото!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+                "Отправьте описание изменений или добавьте ещё фото."
+            )
     else:
-        text = (
-            f"✅ <b>Фото добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
-            f"💰 <i>Доп. стоимость: +{extra_percent}%</i>\n\n"
-            "Отправьте описание изменений или добавьте ещё фото."
-        )
+        if extra_cost > 0:
+            text = (
+                f"✅ <b>Фото добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+                f"💰 <i>Доп. стоимость: +{extra_cost} 🪙</i>\n\n"
+                "Отправьте описание изменений или добавьте ещё фото."
+            )
+        else:
+            text = (
+                f"✅ <b>Фото добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+                "Отправьте описание изменений или добавьте ещё фото."
+            )
     
     await message.answer(
         text=text,
@@ -555,14 +581,22 @@ async def process_additional_document(message: Message, state: FSMContext) -> No
     await state.update_data(source_file_ids=source_file_ids)
     
     photos_count = len(source_file_ids)
-    extra_percent = (photos_count - 1) * EXTRA_IMAGE_COST_PERCENT
+    extra_cost = calculate_extra_images_cost(photos_count)
+    
+    if extra_cost > 0:
+        text = (
+            f"✅ <b>Изображение добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+            f"💰 <i>Доп. стоимость: +{extra_cost} 🪙</i>\n\n"
+            "Отправьте описание изменений или добавьте ещё фото."
+        )
+    else:
+        text = (
+            f"✅ <b>Изображение добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+            "Отправьте описание изменений или добавьте ещё фото."
+        )
     
     await message.answer(
-        text=(
-            f"✅ <b>Изображение добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
-            f"💰 <i>Доп. стоимость: +{extra_percent}%</i>\n\n"
-            "Отправьте описание изменений или добавьте ещё фото."
-        ),
+        text=text,
         reply_markup=back_keyboard(),
         parse_mode="HTML",
     )
@@ -600,7 +634,11 @@ async def set_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
         user = await user_repo.get_by_telegram_id(callback.from_user.id)
         balance = user.tokens if user else 0
 
-    cost = estimate_image_tokens(value, size)
+    # Get images count from state
+    data = await state.get_data()
+    images_count = data.get("images_count", 1)
+    cost = calculate_total_cost(value, images_count)
+    
     await callback.message.edit_text(
         text=_build_confirmation_text(
             prompt=prompt,
@@ -609,6 +647,7 @@ async def set_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
             quality=value,
             size=size,
             model=model,
+            images_count=images_count,
         ),
         reply_markup=image_settings_confirm_keyboard(value, size),
     )
@@ -647,7 +686,9 @@ async def set_edit_size(callback: CallbackQuery, state: FSMContext) -> None:
         user = await user_repo.get_by_telegram_id(callback.from_user.id)
         balance = user.tokens if user else 0
 
-    cost = estimate_image_tokens(quality, value)
+    images_count = data.get("images_count", 1)
+    cost = calculate_total_cost(quality, images_count)
+    
     await callback.message.edit_text(
         text=_build_confirmation_text(
             prompt=prompt,
@@ -656,6 +697,7 @@ async def set_edit_size(callback: CallbackQuery, state: FSMContext) -> None:
             quality=quality,
             size=value,
             model=model,
+            images_count=images_count,
         ),
         reply_markup=image_settings_confirm_keyboard(quality, value),
     )
@@ -703,11 +745,9 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer()
         return
 
-    # Calculate cost with extra for multiple images
-    base_cost = estimate_image_tokens(quality, size)
-    extra_images = max(0, len(source_file_ids) - 1) if source_file_ids else 0
-    extra_cost = int(base_cost * extra_images * EXTRA_IMAGE_COST_PERCENT / 100)
-    cost = base_cost + extra_cost
+    # Calculate cost with new token system
+    images_count = len(source_file_ids) if source_file_ids else 1
+    cost = calculate_total_cost(quality, images_count)
 
     if cost >= config.high_cost_threshold and not expensive_confirmed:
         session_maker = get_session_maker()
@@ -726,6 +766,7 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
                 size=size,
                 model=model,
                 second_confirm=True,
+                images_count=images_count,
             ),
             reply_markup=image_settings_confirm_keyboard(
                 quality,
@@ -761,6 +802,7 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
                 image_quality=quality,
                 image_size=size,
                 source_image_url=source_data,
+                images_count=images_count,
             )
             
             logger.info(f"Created edit task {task.id} for user {user_id}")
@@ -768,12 +810,12 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
         except InsufficientBalanceError as e:
             await callback.message.edit_text(
                 text=(
-                    f"❌ <b>Недостаточно токенов</b>\n\n"
+                    "Ой! Кажется, токены закончились 📸\n\n"
                     f"Требуется: {e.required} 🪙\n"
                     f"Ваш баланс: {e.available} 🪙\n\n"
-                    "Пополните баланс в разделе «Купить токены»"
+                    "Пополни баланс в магазине, чтобы продолжить! 👾"
                 ),
-                reply_markup=main_menu_keyboard(),
+                reply_markup=insufficient_balance_keyboard(),
             )
             await state.clear()
             await callback.answer()
@@ -830,11 +872,9 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
         await callback.answer()
         return
 
-    # Calculate cost with extra for multiple images
-    base_cost = estimate_image_tokens(quality, size)
-    extra_images = max(0, len(source_file_ids) - 1) if source_file_ids else 0
-    extra_cost = int(base_cost * extra_images * EXTRA_IMAGE_COST_PERCENT / 100)
-    cost = base_cost + extra_cost
+    # Calculate cost with new token system
+    images_count = len(source_file_ids) if source_file_ids else 1
+    cost = calculate_total_cost(quality, images_count)
 
     session_maker = get_session_maker()
     async with session_maker() as session:
@@ -859,6 +899,7 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
                 image_quality=quality,
                 image_size=size,
                 source_image_url=source_data,
+                images_count=images_count,
             )
 
             logger.info(f"Created edit task {task.id} for user {user_id}")
@@ -866,12 +907,12 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
         except InsufficientBalanceError as e:
             await callback.message.edit_text(
                 text=(
-                    f"❌ <b>Недостаточно токенов</b>\n\n"
+                    "Ой! Кажется, токены закончились 📸\n\n"
                     f"Требуется: {e.required} 🪙\n"
                     f"Ваш баланс: {e.available} 🪙\n\n"
-                    "Пополните баланс в разделе «Купить токены»"
+                    "Пополни баланс в магазине, чтобы продолжить! 👾"
                 ),
-                reply_markup=main_menu_keyboard(),
+                reply_markup=insufficient_balance_keyboard(),
             )
             await state.clear()
             await callback.answer()

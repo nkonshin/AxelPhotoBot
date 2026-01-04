@@ -21,9 +21,10 @@ class User(Base):
     )
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    tokens: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    tokens: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    api_tokens_spent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     selected_model: Mapped[str] = mapped_column(
-        String(50), default="gpt-image-1", nullable=False
+        String(50), default="gpt-image-1.5", nullable=False
     )
     image_quality: Mapped[str] = mapped_column(
         String(10), default="medium", nullable=False
@@ -66,7 +67,7 @@ class GenerationTask(Base):
         String(20), nullable=False
     )  # "generate" | "edit"
     model: Mapped[str] = mapped_column(
-        String(50), default="gpt-image-1", nullable=False
+        String(50), default="gpt-image-1.5", nullable=False
     )
     image_quality: Mapped[str] = mapped_column(
         String(10), default="medium", nullable=False
@@ -88,6 +89,8 @@ class GenerationTask(Base):
         String(20), default="pending", nullable=False
     )  # "pending" | "processing" | "done" | "failed"
     tokens_spent: Mapped[int] = mapped_column(Integer, nullable=False)
+    api_tokens_spent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    images_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

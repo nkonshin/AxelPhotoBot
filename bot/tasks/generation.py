@@ -18,6 +18,7 @@ from bot.db.models import GenerationTask
 from bot.db.repositories import TaskRepository
 from bot.services.balance import BalanceService
 from bot.services.image_provider import OpenAIImageProvider, GenerationResult
+from bot.services.image_tokens import estimate_api_tokens, IMAGE_QUALITY_LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +162,9 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 await _delete_animation_message(telegram_id, animation_message_id)
             
             if result.success and (result.image_url or result.image_base64):
+                # Calculate API tokens for admin tracking
+                api_tokens = estimate_api_tokens(task.image_quality, task.image_size)
+                
                 # Send result to user via Telegram
                 file_id = await _send_result_to_user(
                     task,
@@ -171,14 +175,19 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 if not file_id:
                     raise GenerationError("Failed to send result to user")
 
-                # Success - update task with result
+                # Success - update task with result and API tokens
                 await task_repo.update_status(
                     task_id,
                     status="done",
                     result_image_url=result.image_url,
                     result_file_id=file_id,
+                    api_tokens_spent=api_tokens,
                 )
-                logger.info(f"Task {task_id} completed successfully")
+                
+                # Update user's total API tokens spent
+                await _update_user_api_tokens(session, task.user_id, api_tokens)
+                
+                logger.info(f"Task {task_id} completed successfully (API tokens: {api_tokens})")
                 
                 return True
             else:
@@ -283,6 +292,31 @@ class GenerationError(Exception):
     pass
 
 
+async def _update_user_api_tokens(session, user_id: int, api_tokens: int) -> None:
+    """
+    Update user's total API tokens spent for admin tracking.
+    
+    Args:
+        session: Database session
+        user_id: User's database ID
+        api_tokens: API tokens to add
+    """
+    try:
+        from sqlalchemy import select
+        from bot.db.models import User
+        
+        result = await session.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if user:
+            user.api_tokens_spent += api_tokens
+            await session.commit()
+    except Exception as e:
+        logger.error(f"Failed to update user API tokens: {e}")
+
+
 async def _send_result_to_user(
     task: GenerationTask,
     image_data: str,
@@ -323,11 +357,12 @@ async def _send_result_to_user(
         task_type_emoji = "🎨" if task.task_type == "generate" else "✏️"
         task_type_text = "Картинка создана" if task.task_type == "generate" else "Фото отредактировано"
         prompt_preview = task.prompt[:300] + "..." if len(task.prompt) > 300 else task.prompt
+        quality_label = IMAGE_QUALITY_LABELS.get(task.image_quality, task.image_quality)
         
         caption = (
             f"{task_type_emoji} <b>{task_type_text}!</b>\n\n"
             f"<blockquote>{prompt_preview}</blockquote>\n\n"
-            f"⚙️ {task.image_quality} • {task.image_size}\n"
+            f"⚙️ {quality_label} • {task.image_size}\n"
             f"💰 Списано: {task.tokens_spent} 🪙\n\n"
             f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>"
         )

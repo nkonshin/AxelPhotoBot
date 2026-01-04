@@ -10,14 +10,16 @@ from bot.config import config
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository, TaskRepository
 from bot.services.balance import BalanceService, InsufficientBalanceError
-from bot.services.image_tokens import estimate_image_tokens, is_valid_quality, is_valid_size
+from bot.services.image_tokens import estimate_image_tokens, calculate_total_cost, is_valid_quality, is_valid_size
 from bot.keyboards.inline import (
     CallbackData,
     image_settings_confirm_keyboard,
     back_keyboard,
     main_menu_keyboard,
+    insufficient_balance_keyboard,
 )
 from bot.states.generation import GenerationStates
+from bot.services.image_tokens import IMAGE_QUALITY_LABELS
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +38,14 @@ def _build_confirmation_text(
     warning = "\n⚠️ <b>Внимание:</b> дорогая генерация." if cost >= config.high_cost_threshold else ""
 
     confirm_line = "Подтвердить генерацию ещё раз?" if second_confirm else "Подтвердить генерацию?"
+    
+    quality_label = IMAGE_QUALITY_LABELS.get(quality, quality)
 
     return (
         f"🎨 <b>Подтверждение генерации</b>\n\n"
         f"<b>Ваш промпт:</b>\n<i>{prompt[:500]}{'...' if len(prompt) > 500 else ''}</i>\n\n"
         f"<b>Модель:</b> {model}\n"
-        f"<b>Качество:</b> {quality}\n"
+        f"<b>Качество:</b> {quality_label}\n"
         f"<b>Формат:</b> {size}\n\n"
         f"<b>Стоимость:</b> {cost} 🪙\n"
         f"<b>Ваш баланс:</b> {balance} 🪙\n"
@@ -301,12 +305,12 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
         except InsufficientBalanceError as e:
             await callback.message.edit_text(
                 text=(
-                    f"❌ <b>Недостаточно токенов</b>\n\n"
+                    "Ой! Кажется, токены закончились 📸\n\n"
                     f"Требуется: {e.required} 🪙\n"
                     f"Ваш баланс: {e.available} 🪙\n\n"
-                    "Пополните баланс в разделе «Купить токены»"
+                    "Пополни баланс в магазине, чтобы продолжить! 👾"
                 ),
-                reply_markup=main_menu_keyboard(),
+                reply_markup=insufficient_balance_keyboard(),
             )
             await state.clear()
             await callback.answer()
@@ -386,12 +390,12 @@ async def confirm_generation_expensive(callback: CallbackQuery, state: FSMContex
         except InsufficientBalanceError as e:
             await callback.message.edit_text(
                 text=(
-                    f"❌ <b>Недостаточно токенов</b>\n\n"
+                    "Ой! Кажется, токены закончились 📸\n\n"
                     f"Требуется: {e.required} 🪙\n"
                     f"Ваш баланс: {e.available} 🪙\n\n"
-                    "Пополните баланс в разделе «Купить токены»"
+                    "Пополни баланс в магазине, чтобы продолжить! 👾"
                 ),
-                reply_markup=main_menu_keyboard(),
+                reply_markup=insufficient_balance_keyboard(),
             )
             await state.clear()
             await callback.answer()

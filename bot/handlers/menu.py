@@ -108,7 +108,7 @@ async def menu_model(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == CallbackData.TOKENS)
 async def menu_tokens(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle 'Купить токены' button."""
+    """Handle 'Купить токены' button - show shop."""
     await state.clear()
     
     # Get current balance
@@ -120,16 +120,27 @@ async def menu_tokens(callback: CallbackQuery, state: FSMContext) -> None:
         user = await user_repo.get_by_telegram_id(user_tg.id)
         balance = user.tokens if user else 0
     
+    shop_text = (
+        "💎 <b>Магазин Акселя</b>\n\n"
+        f"<b>Твой баланс:</b> {balance} 🪙\n\n"
+        "Псс! Чтобы я мог заправить камеру и создать для тебя магию, нужны токены. "
+        "Выбирай подходящий пакет, и погнали творить!\n\n"
+        "🐣 <b>Starter</b> — 99 ₽ (10 токенов)\n\n"
+        "✨ <b>Small</b> — 249 ₽ (50 токенов)\n"
+        "🏷 <i>Скидка 50% (Экономия 246 ₽)</i>\n\n"
+        "🔥 <b>Medium</b> — 449 ₽ (120 токенов) — <b>ХИТ</b>\n"
+        "🏷 <i>Скидка 62% (Экономия 739 ₽)</i>\n\n"
+        "😎 <b>Pro</b> — 890 ₽ (300 токенов)\n"
+        "🏷 <i>Скидка 70% (Экономия 2080 ₽)</i>\n\n"
+        "👑 <b>Vip</b> — 1690 ₽ (700 токенов)\n"
+        "🏷 <i>Скидка 75% (Экономия 5240 ₽)</i>\n\n"
+        "💳 <b>Оплата:</b> Карты РФ, СБП\n"
+        "✅ Токены не сгорают и подходят для любых моделей\n"
+        "📸 1 фото (Medium) = 5 токенов"
+    )
+    
     await callback.message.edit_text(
-        text=(
-            "💰 <b>Купить токены</b>\n\n"
-            f"Ваш текущий баланс: <b>{balance}</b> 🪙\n\n"
-            "Пакеты токенов:\n"
-            "• 50 000 🪙 — 99 ₽\n"
-            "• 150 000 🪙 — 249 ₽\n"
-            "• 500 000 🪙 — 699 ₽\n\n"
-            "🔜 <i>Оплата скоро будет доступна</i>"
-        ),
+        text=shop_text,
         reply_markup=tokens_keyboard(),
     )
     await callback.answer()
@@ -165,5 +176,54 @@ async def tokens_coming_soon(callback: CallbackQuery) -> None:
     """Handle 'coming soon' tokens button."""
     await callback.answer(
         "Оплата скоро будет доступна! 💳",
+        show_alert=True,
+    )
+
+
+# Handle disabled model selection
+@router.callback_query(F.data == "model:disabled")
+async def model_disabled(callback: CallbackQuery) -> None:
+    """Handle disabled model button (GPT Image 1)."""
+    await callback.answer(
+        "Эта модель устарела и больше недоступна. Используйте GPT Image 1.5 🚀",
+        show_alert=True,
+    )
+
+
+# Handle shop package buttons
+@router.callback_query(F.data.startswith("shop:"))
+async def handle_shop_package(callback: CallbackQuery) -> None:
+    """Handle shop package selection."""
+    from bot.keyboards.inline import SHOP_PACKAGES
+    from bot.config import config
+    
+    package_key = callback.data.replace("shop:", "")
+    
+    # Handle contact manager
+    if package_key == "contact":
+        support = config.support_username or "@support"
+        await callback.message.answer(
+            text=(
+                "📞 <b>Связаться с менеджером</b>\n\n"
+                f"Если у вас возникли проблемы с оплатой или есть вопросы, "
+                f"напишите нам: {support}\n\n"
+                "Мы ответим в течение 10 минут! ⚡"
+            ),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+    
+    # Handle package selection
+    if package_key not in SHOP_PACKAGES:
+        await callback.answer("❌ Неизвестный пакет")
+        return
+    
+    package = SHOP_PACKAGES[package_key]
+    
+    # TODO: Integrate with YooKassa payment
+    # For now, show coming soon message
+    await callback.answer(
+        f"💳 Оплата пакета {package['name']} ({package['price']} ₽) скоро будет доступна!",
         show_alert=True,
     )
