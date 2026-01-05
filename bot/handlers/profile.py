@@ -15,7 +15,6 @@ from bot.keyboards.inline import (
 from bot.services.image_tokens import IMAGE_QUALITY_LABELS
 from bot.utils.messages import (
     PROFILE_HEADER,
-    PROFILE_HISTORY_HEADER,
     PROFILE_HISTORY_ITEM,
     PROFILE_NO_HISTORY,
     PROFILE_IMAGE_CAPTION,
@@ -66,16 +65,15 @@ async def show_profile(callback: CallbackQuery) -> None:
     
     # Build profile message
     text = PROFILE_HEADER.format(
+        user_name=user.username or user.first_name or "Пользователь",
         tokens=user.tokens,
         total=total_generations,
-        successful=successful_generations,
         model=user.selected_model,
         quality=quality_label,
         size=user.image_size,
     )
     
     if history:
-        text += PROFILE_HISTORY_HEADER
         for i, task in enumerate(history[:3], 1):
             status_icon = format_task_status(task.status)
             task_type_str = format_task_type(task.task_type)
