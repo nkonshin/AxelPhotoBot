@@ -118,3 +118,35 @@ class Template(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class Payment(Base):
+    """Payment model for YooKassa payments."""
+    
+    __tablename__ = "payments"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+    yookassa_payment_id: Mapped[str] = mapped_column(
+        String(100), unique=True, nullable=False, index=True
+    )
+    package: Mapped[str] = mapped_column(String(50), nullable=False)  # starter, small, medium, pro, vip
+    tokens_amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount_value: Mapped[str] = mapped_column(String(20), nullable=False)  # "99.00"
+    amount_currency: Mapped[str] = mapped_column(String(10), default="RUB", nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(30), default="pending", nullable=False
+    )  # pending, waiting_for_capture, succeeded, canceled
+    paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    confirmation_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now()
+    )
+    
+    # Relationships
+    user: Mapped["User"] = relationship("User", lazy="selectin")

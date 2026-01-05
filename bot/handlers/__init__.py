@@ -18,6 +18,7 @@ from bot.handlers.invite import router as invite_router
 from bot.handlers.regenerate import router as regenerate_router
 from bot.handlers.feedback import router as feedback_router
 from bot.handlers.gift import router as gift_router
+from bot.handlers.payment import router as payment_router
 from bot.handlers.errors import router as errors_router
 
 
@@ -43,6 +44,7 @@ def register_all_handlers(dp: Dispatcher) -> None:
     dp.include_router(balance_router)    # /balance and /tokens commands
     dp.include_router(model_router)      # Model callbacks
     dp.include_router(tokens_router)     # Tokens callbacks
+    dp.include_router(payment_router)    # Payment/shop handlers
     dp.include_router(menu_router)       # Main menu navigation
     dp.include_router(admin_router)      # Admin commands (last, after FSM handlers)
     dp.include_router(errors_router)     # Global error handler (last)
@@ -66,5 +68,6 @@ __all__ = [
     "regenerate_router",
     "feedback_router",
     "gift_router",
+    "payment_router",
     "errors_router",
 ]

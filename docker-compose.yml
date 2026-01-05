@@ -70,6 +70,10 @@ services:
       WELCOME_VIDEO_FILE_ID: ${WELCOME_VIDEO_FILE_ID:-}
       # Support
       SUPPORT_USERNAME: ${SUPPORT_USERNAME:-}
+      # YooKassa Payment
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      YOOKASSA_RETURN_URL: ${YOOKASSA_RETURN_URL:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -126,6 +130,10 @@ services:
       WELCOME_VIDEO_FILE_ID: ${WELCOME_VIDEO_FILE_ID:-}
       # Support
       SUPPORT_USERNAME: ${SUPPORT_USERNAME:-}
+      # YooKassa Payment
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      YOOKASSA_RETURN_URL: ${YOOKASSA_RETURN_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

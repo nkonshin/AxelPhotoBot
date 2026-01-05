@@ -447,3 +447,84 @@ class StatsRepository:
             "active_users_today": await self.get_active_users_today(),
             "model_usage": await self.get_model_usage(),
         }
+
+
+class PaymentRepository:
+    """Repository for Payment CRUD operations."""
+    
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def create(
+        self,
+        user_id: int,
+        yookassa_payment_id: str,
+        package: str,
+        tokens_amount: int,
+        amount_value: str,
+        confirmation_url: str,
+        status: str = "pending",
+    ) -> "Payment":
+        """Create a new payment record."""
+        from bot.db.models import Payment
+        
+        payment = Payment(
+            user_id=user_id,
+            yookassa_payment_id=yookassa_payment_id,
+            package=package,
+            tokens_amount=tokens_amount,
+            amount_value=amount_value,
+            confirmation_url=confirmation_url,
+            status=status,
+        )
+        self.session.add(payment)
+        await self.session.commit()
+        await self.session.refresh(payment)
+        
+        return payment
+    
+    async def get_by_yookassa_id(self, yookassa_payment_id: str) -> Optional["Payment"]:
+        """Get payment by YooKassa payment ID."""
+        from bot.db.models import Payment
+        
+        result = await self.session.execute(
+            select(Payment).where(Payment.yookassa_payment_id == yookassa_payment_id)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_latest_pending(self, user_id: int) -> Optional["Payment"]:
+        """Get user's latest pending payment."""
+        from bot.db.models import Payment
+        
+        result = await self.session.execute(
+            select(Payment)
+            .where(Payment.user_id == user_id)
+            .where(Payment.status.in_(["pending", "waiting_for_capture"]))
+            .order_by(desc(Payment.created_at))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+    
+    async def update_status(
+        self,
+        payment_id: int,
+        status: str,
+        paid: bool = False,
+    ) -> Optional["Payment"]:
+        """Update payment status."""
+        from bot.db.models import Payment
+        
+        result = await self.session.execute(
+            select(Payment).where(Payment.id == payment_id)
+        )
+        payment = result.scalar_one_or_none()
+        
+        if payment is None:
+            return None
+        
+        payment.status = status
+        payment.paid = paid
+        await self.session.commit()
+        await self.session.refresh(payment)
+        
+        return payment

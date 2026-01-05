@@ -331,3 +331,112 @@ async def admin_add_tokens(request: Request, telegram_id: int):
             "added": amount,
             "new_balance": old_balance + amount,
         }
+
+
+# ============== YooKassa Webhook ==============
+
+@app.post("/yookassa/webhook")
+async def yookassa_webhook(request: Request):
+    """
+    Handle YooKassa payment notifications.
+    
+    Events:
+    - payment.succeeded - Payment completed successfully
+    - payment.canceled - Payment was canceled
+    - payment.waiting_for_capture - Payment is waiting for capture
+    """
+    try:
+        data = await request.json()
+        logger.info(f"YooKassa webhook received: {data.get('event')}")
+        
+        from bot.services.payment import PaymentService
+        from bot.db.repositories import UserRepository, PaymentRepository
+        from bot.keyboards.inline import SHOP_PACKAGES
+        
+        # Parse notification
+        payment_data = PaymentService.parse_webhook_notification(data)
+        
+        if not payment_data:
+            logger.warning("Invalid YooKassa webhook data")
+            return Response(status_code=200)
+        
+        event = payment_data["event"]
+        payment_id = payment_data["payment_id"]
+        status = payment_data["status"]
+        paid = payment_data["paid"]
+        
+        logger.info(f"YooKassa payment {payment_id}: event={event}, status={status}, paid={paid}")
+        
+        session_maker = get_session_maker()
+        
+        async with session_maker() as session:
+            payment_repo = PaymentRepository(session)
+            user_repo = UserRepository(session)
+            
+            # Find payment in database
+            payment = await payment_repo.get_by_yookassa_id(payment_id)
+            
+            if not payment:
+                logger.warning(f"Payment {payment_id} not found in database")
+                return Response(status_code=200)
+            
+            old_status = payment.status
+            
+            # Update payment status
+            payment.status = status
+            payment.paid = paid
+            
+            # If payment succeeded and wasn't processed before
+            if event == "payment.succeeded" and paid and old_status != "succeeded":
+                # Add tokens to user
+                user = await user_repo.get_by_id(payment.user_id)
+                
+                if user:
+                    await user_repo.update_tokens(user.id, payment.tokens_amount)
+                    logger.info(
+                        f"Payment {payment_id} succeeded: added {payment.tokens_amount} tokens "
+                        f"to user {user.telegram_id}"
+                    )
+                    
+                    # Send notification to user
+                    try:
+                        bot = get_bot()
+                        package_name = SHOP_PACKAGES.get(payment.package, {}).get("name", payment.package)
+                        new_balance = user.tokens + payment.tokens_amount
+                        
+                        await bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=(
+                                "✅ <b>Оплата прошла успешно!</b>\n\n"
+                                f"<b>Пакет:</b> {package_name}\n"
+                                f"<b>Зачислено:</b> +{payment.tokens_amount} 🪙\n"
+                                f"<b>Ваш баланс:</b> {new_balance} 🪙\n\n"
+                                "Спасибо за покупку! Теперь можно творить магию 🎨"
+                            ),
+                            parse_mode="HTML",
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send payment notification to user: {e}")
+                    
+                    # Notify admins
+                    try:
+                        from bot.services.admin_notify import notify_admins
+                        await notify_admins(
+                            f"💰 <b>Новая оплата!</b>\n\n"
+                            f"Пользователь: @{user.username or '—'} ({user.telegram_id})\n"
+                            f"Пакет: {SHOP_PACKAGES.get(payment.package, {}).get('name', payment.package)}\n"
+                            f"Сумма: {payment.amount_value} ₽\n"
+                            f"Токены: +{payment.tokens_amount} 🪙",
+                            title="Оплата"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to notify admins: {e}")
+            
+            await session.commit()
+        
+        return Response(status_code=200)
+        
+    except Exception as e:
+        logger.exception(f"Error processing YooKassa webhook: {e}")
+        # Return 200 to prevent YooKassa from retrying
+        return Response(status_code=200)

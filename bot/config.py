@@ -78,6 +78,11 @@ class Config:
     
     # Welcome video
     welcome_video_file_id: str = ""  # file_id видео-кружка для приветствия
+    
+    # YooKassa Payment
+    yookassa_shop_id: str = ""  # ID магазина ЮKassa
+    yookassa_secret_key: str = ""  # Секретный ключ ЮKassa
+    yookassa_return_url: str = ""  # URL возврата после оплаты
 
     def is_admin(self, telegram_id: int) -> bool:
         """Check if user is admin."""
@@ -125,6 +130,11 @@ def load_config() -> Config:
         
         # Welcome video
         welcome_video_file_id=os.getenv("WELCOME_VIDEO_FILE_ID", ""),
+        
+        # YooKassa Payment
+        yookassa_shop_id=os.getenv("YOOKASSA_SHOP_ID", ""),
+        yookassa_secret_key=os.getenv("YOOKASSA_SECRET_KEY", ""),
+        yookassa_return_url=os.getenv("YOOKASSA_RETURN_URL", ""),
     )
 
 

@@ -1,5 +1,53 @@
 # Changelog: Улучшения и рефакторинг
 
+## Дата: 6 января 2026
+
+### 35. Интеграция с ЮKassa для приёма платежей
+
+**Новые файлы:**
+- `bot/services/payment.py` — сервис для работы с YooKassa API
+- `bot/handlers/payment.py` — хендлеры для обработки платежей
+- `alembic/versions/20260106_add_payments_table.py` — миграция для таблицы payments
+
+**Изменённые файлы:**
+- `bot/config.py` — добавлены настройки YooKassa
+- `bot/db/models.py` — добавлена модель Payment
+- `bot/db/repositories.py` — добавлен PaymentRepository
+- `bot/handlers/__init__.py` — регистрация payment_router
+- `bot/handlers/menu.py` — удалён старый обработчик shop
+- `bot/main.py` — добавлен webhook endpoint `/yookassa/webhook`
+- `requirements.txt` — добавлен пакет `yookassa>=3.0.0`
+- `docker-compose.yml` — добавлены переменные YooKassa
+- `.env.example` — добавлены переменные YooKassa
+
+**Как работает:**
+
+1. Пользователь выбирает пакет в магазине
+2. Создаётся платёж в YooKassa
+3. Пользователь переходит по ссылке и оплачивает
+4. YooKassa отправляет webhook на `/yookassa/webhook`
+5. Токены автоматически зачисляются на баланс
+6. Пользователь получает уведомление в боте
+7. Админы получают уведомление о новой оплате
+
+**Новые переменные окружения:**
+
+| Переменная | Описание |
+|------------|----------|
+| `YOOKASSA_SHOP_ID` | ID магазина из личного кабинета ЮKassa |
+| `YOOKASSA_SECRET_KEY` | Секретный ключ из личного кабинета ЮKassa |
+| `YOOKASSA_RETURN_URL` | URL возврата после оплаты (deep link бота) |
+
+**Настройка в ЮKassa:**
+
+1. Перейти в личный кабинет → Интеграция → API ключи
+2. Скопировать Shop ID и Secret Key
+3. Добавить в `.env`
+4. Настроить webhook: URL = `https://your-domain.com/yookassa/webhook`
+5. Выбрать события: `payment.succeeded`, `payment.canceled`
+
+---
+
 ## Дата: 5 января 2026
 
 ### 33. Исправлен баг с редактированием фото
