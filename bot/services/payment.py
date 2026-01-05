@@ -77,12 +77,13 @@ class PaymentService:
                     "return_url": config.yookassa_return_url or f"https://t.me/{config.bot_token.split(':')[0]}"
                 },
                 "capture": True,  # Auto-capture payment
-                "description": f"Пакет {package['name']} ({tokens} токенов)",
+                "description": "Покупка в Аксель AI | t.me/AxelPhotoBot",
                 "metadata": {
                     "user_id": user_id,
                     "telegram_id": telegram_id,
                     "package": package_key,
                     "tokens": tokens,
+                    "package_name": package['name'],
                 }
             }, idempotence_key)
             
