@@ -1,7 +1,7 @@
 """Add payments table for YooKassa integration
 
 Revision ID: f1a2b3c4d5e6
-Revises: 
+Revises: extend_source_url
 Create Date: 2026-01-06
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'f1a2b3c4d5e6'
-down_revision: Union[str, None] = None
+down_revision: Union[str, None] = 'extend_source_url'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

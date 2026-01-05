@@ -2,6 +2,53 @@
 
 ## Дата: 6 января 2026
 
+### 36. Исправлен конфликт миграций Alembic
+
+**Файлы:**
+- `alembic/versions/20260106_add_payments_table.py` — исправлен `down_revision`
+- `Manuals/FIX_ALEMBIC_CONFLICT.md` — инструкция по исправлению
+
+**Проблема:** Ошибка `Multiple head revisions are present for given argument 'head'`
+
+При создании миграции для таблицы `payments` был указан `down_revision = None`, что создало новую ветку миграций вместо продолжения существующей цепочки.
+
+**Решение:** Изменён `down_revision` на `'extend_source_url'`, чтобы миграция шла после предыдущей.
+
+```python
+# Было:
+down_revision: Union[str, None] = None
+
+# Стало:
+down_revision: Union[str, None] = 'extend_source_url'
+```
+
+**Как исправить на сервере:**
+
+См. подробную инструкцию в `Manuals/FIX_ALEMBIC_CONFLICT.md`
+
+Краткая версия:
+```bash
+# Остановить контейнеры
+docker-compose down
+
+# Обновить код
+git pull
+
+# Запустить только БД
+docker-compose up -d db
+
+# Объединить головы миграций
+docker-compose run --rm app bash
+alembic merge heads -m "merge payment and extend_url migrations"
+alembic upgrade head
+exit
+
+# Запустить всё
+docker-compose up -d
+```
+
+---
+
 ### 35. Интеграция с ЮKassa для приёма платежей
 
 **Новые файлы:**
