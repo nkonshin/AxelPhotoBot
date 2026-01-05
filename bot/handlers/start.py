@@ -12,68 +12,17 @@ from bot.config import config
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository
 from bot.keyboards.inline import main_menu_keyboard, subscription_keyboard
+from bot.utils.messages import (
+    WELCOME_MESSAGE,
+    SUBSCRIPTION_MESSAGE,
+    SUBSCRIPTION_SUCCESS,
+    CALLBACK_SUBSCRIPTION_NOT_CONFIRMED,
+    CALLBACK_SUBSCRIPTION_CONFIRMED,
+)
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="start")
-
-
-WELCOME_MESSAGE = """
-🎨 <b>Привет! Я Аксель — твой AI-фотограф!</b>
-
-Я помогу создавать уникальные изображения с помощью искусственного интеллекта.
-
-<b>Что я умею:</b>
-• 🎨 Создавать картинки по текстовому описанию
-• 🪄 Редактировать твои фотографии
-• 💡 Предлагать готовые идеи для генерации
-
-🎁 <b>Тебе начислено 7 бесплатных токенов!</b>
-Этого хватит на 1 фото в максимальном качестве или несколько в стандартном.
-
-<b>Твой баланс:</b> {tokens} 🪙
-
-Выбирай действие из меню:
-"""
-
-WELCOME_BACK_MESSAGE = """
-👋 <b>С возвращением!</b>
-
-<b>Твой баланс:</b> {tokens} 🪙
-
-Выбирай действие из меню:
-"""
-
-SUBSCRIPTION_MESSAGE = """
-Привет! Я Аксель, твой новый нейро-друг! 😊
-
-Я помогу тебе создавать и улучшать изображения — быстро, просто и профессионально.
-
-🎁 <b>Твой стартовый бонус:</b>
-• 7 токенов генерации
-
-Чтобы активировать бонус, подпишитесь на мой закрытый канал:
-{channel}
-
-<b>В канале:</b>
-• Бесплатные шаблоны и промпты для идеальных фото.
-• Готовые стили, которые мы протестировали за тебя.
-• Разборы удачных генераций и лайфхаки.
-• Обновления и скрытые фичи бота
-
-Канал — это не реклама.
-Это база знаний, которая сэкономит тебе время и деньги.
-"""
-
-SUBSCRIPTION_SUCCESS_MESSAGE = """
-✅ <b>Отлично! Подписка подтверждена!</b>
-
-🎁 Тебе начислено <b>7 бесплатных токенов</b>!
-
-<b>Твой баланс:</b> {tokens} 🪙
-
-Выбирай действие из меню:
-"""
 
 
 def parse_referral_code(args: str | None) -> int | None:
@@ -224,15 +173,11 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         balance = user.tokens
         max_generations = balance // 2  # Low quality = 2 tokens
         
-        text = (
-            f"<b>👋 Привет, {user_name}!</b>\n\n"
-            f"<b>Я Аксель — твой личный ИИ-фотограф.</b>\n\n"
-            f"Я превращаю твои идеи в цифровые шедевры. "
-            f"Хочешь создать арт с нуля или сделаем тебе профессиональную фотосессию? 🎨\n\n"
-            f"💳 <b>Твой баланс:</b> <code>{balance}</code> токенов\n"
-            f"💡 <i>Этого хватит на {max_generations} генераций.</i>"
-            f"{gift_message}\n\n"
-            f"👇 <b>С чего начнем?</b>"
+        text = WELCOME_MESSAGE.format(
+            user_name=user_name,
+            balance=balance,
+            max_generations=max_generations,
+            gift_message=gift_message,
         )
         
         if created:
@@ -262,7 +207,7 @@ async def check_subscription_callback(callback: CallbackQuery, bot: Bot) -> None
     
     if not is_subscribed:
         await callback.answer(
-            text="❌ Вы ещё не подписаны на канал",
+            text=CALLBACK_SUBSCRIPTION_NOT_CONFIRMED,
             show_alert=True,
         )
         return
@@ -280,9 +225,9 @@ async def check_subscription_callback(callback: CallbackQuery, bot: Bot) -> None
         if created:
             logger.info(f"New user registered after subscription: {user_tg.id}")
     
-    await callback.answer("✅ Подписка подтверждена!")
+    await callback.answer(CALLBACK_SUBSCRIPTION_CONFIRMED)
     
     await callback.message.edit_text(
-        text=SUBSCRIPTION_SUCCESS_MESSAGE.format(tokens=user.tokens),
+        text=SUBSCRIPTION_SUCCESS.format(tokens=user.tokens),
         reply_markup=main_menu_keyboard(),
     )

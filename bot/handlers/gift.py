@@ -25,6 +25,30 @@ from bot.keyboards.inline import (
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository, GiftRepository, PaymentRepository
 from bot.services.payment import PaymentService
+from bot.utils.messages import (
+    GIFT_SELECT_PACKAGE,
+    GIFT_ENTER_USERNAME,
+    GIFT_PAYMENT,
+    GIFT_SUCCESS,
+    GIFT_RECEIVED,
+    GIFT_CANCELED,
+    GIFT_RECIPIENT_EXISTS,
+    GIFT_RECIPIENT_PENDING,
+    GIFT_STATUS_CLAIMED,
+    GIFT_STATUS_PENDING,
+    ERROR_USER_NOT_FOUND,
+    ERROR_PAYMENT_CREATE,
+    ERROR_PAYMENT_CHECK,
+    ERROR_GIFT_NOT_FOUND,
+    ERROR_PAYMENT_NOT_FOUND,
+    ERROR_USERNAME_NO_AT,
+    ERROR_USERNAME_TOO_SHORT,
+    ERROR_GIFT_SELF,
+    CALLBACK_UNKNOWN_PACKAGE,
+    CALLBACK_PAYMENT_PROCESSING,
+    CALLBACK_GIFT_PAID,
+    CALLBACK_PAYMENT_CANCELED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,20 +147,8 @@ async def handle_gift(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(GiftStates.selecting_package)
     
-    text = (
-        "🎁 <b>Подарить фотосессию</b>\n\n"
-        "Выберите пакет токенов для подарка:\n\n"
-        "🐣 <b>Starter</b> — 99 ₽ (10 токенов)\n"
-        "✨ <b>Small</b> — 249 ₽ (50 токенов)\n"
-        "🔥 <b>Medium</b> — 449 ₽ (120 токенов)\n"
-        "😎 <b>Pro</b> — 890 ₽ (300 токенов)\n"
-        "👑 <b>Vip</b> — 1690 ₽ (700 токенов)\n\n"
-        "После оплаты получатель сможет использовать токены "
-        "для генерации изображений 🎨"
-    )
-    
     await callback.message.edit_text(
-        text=text,
+        text=GIFT_SELECT_PACKAGE,
         reply_markup=gift_packages_keyboard(),
     )
     await callback.answer()
@@ -148,7 +160,7 @@ async def select_gift_package(callback: CallbackQuery, state: FSMContext) -> Non
     package_key = callback.data.replace("gift:package:", "")
     
     if package_key not in SHOP_PACKAGES:
-        await callback.answer("❌ Неизвестный пакет")
+        await callback.answer(CALLBACK_UNKNOWN_PACKAGE)
         return
     
     package = SHOP_PACKAGES[package_key]
@@ -158,12 +170,10 @@ async def select_gift_package(callback: CallbackQuery, state: FSMContext) -> Non
     await state.set_state(GiftStates.entering_username)
     
     await callback.message.edit_text(
-        text=(
-            f"🎁 <b>Подарок: {package['name']}</b>\n"
-            f"💰 Стоимость: {package['price']} ₽\n"
-            f"🪙 Токенов: {package['tokens']}\n\n"
-            "Введите @username получателя подарка:\n\n"
-            "<i>Например: @username</i>"
+        text=GIFT_ENTER_USERNAME.format(
+            package_name=package['name'],
+            price=package['price'],
+            tokens=package['tokens'],
         ),
         reply_markup=back_keyboard(),
     )
@@ -178,8 +188,7 @@ async def enter_recipient_username(message: Message, state: FSMContext) -> None:
     # Validate username format
     if not username.startswith("@"):
         await message.answer(
-            "❌ Username должен начинаться с @\n\n"
-            "Например: @username",
+            ERROR_USERNAME_NO_AT,
             reply_markup=back_keyboard(),
         )
         return
@@ -189,8 +198,7 @@ async def enter_recipient_username(message: Message, state: FSMContext) -> None:
     
     if len(username_clean) < 3:
         await message.answer(
-            "❌ Username слишком короткий\n\n"
-            "Введите корректный @username",
+            ERROR_USERNAME_TOO_SHORT,
             reply_markup=back_keyboard(),
         )
         return
@@ -198,8 +206,7 @@ async def enter_recipient_username(message: Message, state: FSMContext) -> None:
     # Check if user is trying to gift to themselves
     if message.from_user.username and username_clean.lower() == message.from_user.username.lower():
         await message.answer(
-            "❌ Нельзя подарить токены самому себе!\n\n"
-            "Введите @username другого пользователя",
+            ERROR_GIFT_SELF,
             reply_markup=back_keyboard(),
         )
         return
@@ -238,7 +245,7 @@ async def enter_recipient_username(message: Message, state: FSMContext) -> None:
         sender = await user_repo.get_by_telegram_id(user_tg.id)
         if not sender:
             await message.answer(
-                "❌ Пользователь не найден. Используйте /start",
+                ERROR_USER_NOT_FOUND,
                 reply_markup=back_keyboard(),
             )
             await state.clear()
@@ -246,7 +253,7 @@ async def enter_recipient_username(message: Message, state: FSMContext) -> None:
         
         # Check if recipient exists (optional - we allow gifts to non-registered users)
         recipient = await user_repo.get_by_username(username_clean)
-        recipient_status = "уже в боте ✅" if recipient else "получит при первом входе 📩"
+        recipient_status = GIFT_RECIPIENT_EXISTS if recipient else GIFT_RECIPIENT_PENDING
         
         # Create gift record (pending payment)
         gift = await gift_repo.create(
@@ -268,7 +275,7 @@ async def enter_recipient_username(message: Message, state: FSMContext) -> None:
         
         if not payment_data:
             await message.answer(
-                "❌ Ошибка создания платежа. Попробуйте позже.",
+                ERROR_PAYMENT_CREATE,
                 reply_markup=main_menu_keyboard(),
             )
             await state.clear()
@@ -298,15 +305,12 @@ async def enter_recipient_username(message: Message, state: FSMContext) -> None:
     
     # Show payment message
     await message.answer(
-        text=(
-            f"🎁 <b>Подарок для @{username_clean}</b>\n\n"
-            f"<b>Пакет:</b> {package['name']}\n"
-            f"<b>Токенов:</b> {package['tokens']} 🪙\n"
-            f"<b>Сумма:</b> {package['price']} ₽\n\n"
-            f"<b>Получатель:</b> @{username_clean}\n"
-            f"<i>Статус: {recipient_status}</i>\n\n"
-            "Нажмите «Оплатить подарок» для перехода на страницу оплаты.\n\n"
-            "После оплаты получатель автоматически получит токены! 🎉"
+        text=GIFT_PAYMENT.format(
+            recipient=username_clean,
+            package_name=package['name'],
+            tokens=package['tokens'],
+            price=package['price'],
+            recipient_status=recipient_status,
         ),
         reply_markup=gift_payment_keyboard(payment_data["confirmation_url"], gift.id),
     )
@@ -327,11 +331,11 @@ async def check_gift_payment(callback: CallbackQuery) -> None:
         gift = await gift_repo.get_by_id(gift_id)
         
         if not gift:
-            await callback.answer("❌ Подарок не найден")
+            await callback.answer(ERROR_GIFT_NOT_FOUND)
             return
         
         if not gift.payment_id:
-            await callback.answer("❌ Платёж не найден")
+            await callback.answer(ERROR_PAYMENT_NOT_FOUND)
             return
         
         # Get payment
@@ -342,14 +346,14 @@ async def check_gift_payment(callback: CallbackQuery) -> None:
         payment = result.scalar_one_or_none()
         
         if not payment:
-            await callback.answer("❌ Платёж не найден")
+            await callback.answer(ERROR_PAYMENT_NOT_FOUND)
             return
         
         # Check status in YooKassa
         yookassa_payment = PaymentService.get_payment(payment.yookassa_payment_id)
         
         if not yookassa_payment:
-            await callback.answer("❌ Ошибка проверки статуса")
+            await callback.answer(ERROR_PAYMENT_CHECK)
             return
         
         old_status = payment.status
@@ -384,12 +388,10 @@ async def check_gift_payment(callback: CallbackQuery) -> None:
                         
                         await bot.send_message(
                             chat_id=recipient.telegram_id,
-                            text=(
-                                f"🎁 <b>Вам подарили токены!</b>\n\n"
-                                f"<b>От:</b> {sender_name}\n"
-                                f"<b>Пакет:</b> {SHOP_PACKAGES.get(gift.package, {}).get('name', gift.package)}\n"
-                                f"<b>Токенов:</b> +{gift.tokens_amount} 🪙\n\n"
-                                "Токены уже на вашем балансе! 🎉"
+                            text=GIFT_RECEIVED.format(
+                                sender=sender_name,
+                                package_name=SHOP_PACKAGES.get(gift.package, {}).get('name', gift.package),
+                                tokens=gift.tokens_amount,
                             ),
                             parse_mode="HTML",
                         )
@@ -399,39 +401,33 @@ async def check_gift_payment(callback: CallbackQuery) -> None:
                 await session.commit()
             
             package = SHOP_PACKAGES.get(gift.package, {})
-            status_text = "уже получил токены! 🎉" if gift.status == "claimed" else "получит токены при входе в бота 📩"
+            status_text = GIFT_STATUS_CLAIMED if gift.status == "claimed" else GIFT_STATUS_PENDING
             
             await callback.message.edit_text(
-                text=(
-                    "✅ <b>Подарок оплачен!</b>\n\n"
-                    f"<b>Пакет:</b> {package.get('name', gift.package)}\n"
-                    f"<b>Токенов:</b> {gift.tokens_amount} 🪙\n"
-                    f"<b>Получатель:</b> @{gift.recipient_username}\n\n"
-                    f"<i>Статус: {status_text}</i>\n\n"
-                    "Спасибо за подарок! 💝"
+                text=GIFT_SUCCESS.format(
+                    package_name=package.get('name', gift.package),
+                    tokens=gift.tokens_amount,
+                    recipient=gift.recipient_username,
+                    status=status_text,
                 ),
                 reply_markup=main_menu_keyboard(),
             )
-            await callback.answer("✅ Подарок оплачен!")
+            await callback.answer(CALLBACK_GIFT_PAID)
             
         elif yookassa_payment.status == "canceled":
             gift.status = "canceled"
             await session.commit()
             
             await callback.message.edit_text(
-                text=(
-                    "❌ <b>Платёж отменён</b>\n\n"
-                    "Платёж был отменён или истёк срок оплаты.\n"
-                    "Попробуйте создать новый подарок."
-                ),
+                text=GIFT_CANCELED,
                 reply_markup=main_menu_keyboard(),
             )
-            await callback.answer("Платёж отменён")
+            await callback.answer(CALLBACK_PAYMENT_CANCELED)
             
         elif yookassa_payment.status == "pending":
             await session.commit()
             await callback.answer(
-                "⏳ Платёж ещё обрабатывается. Подождите немного.",
+                CALLBACK_PAYMENT_PROCESSING,
                 show_alert=True,
             )
         else:

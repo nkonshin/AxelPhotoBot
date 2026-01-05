@@ -1,0 +1,37 @@
+root@ams-1-vm-cd6u:~/NanoBananaBot# docker compose up -d postgres
+WARN[0000] /root/NanoBananaBot/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+WARN[0000] No services to build                         
+[+] up 2/2
+ ✔ Network nanobananabot_default Created                                                                                                                                                                                                0.1s 
+ ✔ Container telegram_bot_db     Created                                                                                                                                                                                                0.3s 
+root@ams-1-vm-cd6u:~/NanoBananaBot# docker compose exec postgres psql -U botuser -d telegram_bot -c "SELECT * FROM alembic_version;"
+WARN[0000] /root/NanoBananaBot/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+ version_num 
+-------------
+(0 rows)
+
+root@ams-1-vm-cd6u:~/NanoBananaBot# docker compose exec postgres psql -U botuser -d telegram_bot -c "\dt"
+WARN[0000] /root/NanoBananaBot/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+              List of relations
+ Schema |       Name       | Type  |  Owner  
+--------+------------------+-------+---------
+ public | alembic_version  | table | botuser
+ public | generation_tasks | table | botuser
+ public | payments         | table | botuser
+ public | templates        | table | botuser
+ public | users            | table | botuser
+(5 rows)
+
+root@ams-1-vm-cd6u:~/NanoBananaBot# docker compose exec postgres psql -U botuser -d telegram_bot -c "SELECT COUNT(*) FROM payments;"
+WARN[0000] /root/NanoBananaBot/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+ count 
+-------
+     4
+(1 row)
+
+root@ams-1-vm-cd6u:~/NanoBananaBot# docker compose exec postgres psql -U botuser -d telegram_bot -c "SELECT COUNT(*) FROM gifts;"
+WARN[0000] /root/NanoBananaBot/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion 
+ERROR:  relation "gifts" does not exist
+LINE 1: SELECT COUNT(*) FROM gifts;
+                             ^
+root@ams-1-vm-cd6u:~/NanoBananaBot# 

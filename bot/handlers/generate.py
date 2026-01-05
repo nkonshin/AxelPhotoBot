@@ -20,6 +20,25 @@ from bot.keyboards.inline import (
 )
 from bot.states.generation import GenerationStates
 from bot.services.image_tokens import IMAGE_QUALITY_LABELS
+from bot.utils.messages import (
+    ERROR_EMPTY_PROMPT,
+    ERROR_PROMPT_TOO_LONG,
+    ERROR_USER_NOT_FOUND,
+    ERROR_SESSION_LOST,
+    ERROR_INSUFFICIENT_BALANCE,
+    ERROR_SEND_TEXT_PROMPT,
+    GENERATE_TASK_CREATED,
+    GENERATE_CANCELLED,
+    EXPENSIVE_WARNING,
+    CONFIRM_LINE,
+    CONFIRM_LINE_AGAIN,
+    CALLBACK_GENERATION_STARTED,
+    CALLBACK_CANCELLED,
+    CALLBACK_CONFIRM_AGAIN,
+    CALLBACK_INVALID_QUALITY,
+    CALLBACK_INVALID_SIZE,
+    CALLBACK_STATE_ERROR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +54,8 @@ def _build_confirmation_text(
     model: str,
     second_confirm: bool = False,
 ) -> str:
-    warning = "\n⚠️ <b>Внимание:</b> дорогая генерация." if cost >= config.high_cost_threshold else ""
-
-    confirm_line = "Подтвердить генерацию ещё раз?" if second_confirm else "Подтвердить генерацию?"
-    
+    warning = EXPENSIVE_WARNING if cost >= config.high_cost_threshold else ""
+    confirm_line = CONFIRM_LINE_AGAIN if second_confirm else CONFIRM_LINE
     quality_label = IMAGE_QUALITY_LABELS.get(quality, quality)
 
     return (
@@ -66,14 +83,14 @@ async def process_prompt(message: Message, state: FSMContext) -> None:
     
     if not prompt:
         await message.answer(
-            "❌ Пожалуйста, введите описание изображения.",
+            ERROR_EMPTY_PROMPT,
             reply_markup=back_keyboard(),
         )
         return
     
     if len(prompt) > 2000:
         await message.answer(
-            "❌ Описание слишком длинное. Максимум 2000 символов.",
+            ERROR_PROMPT_TOO_LONG,
             reply_markup=back_keyboard(),
         )
         return
@@ -88,7 +105,7 @@ async def process_prompt(message: Message, state: FSMContext) -> None:
         
         if user is None:
             await message.answer(
-                "❌ Пользователь не найден. Используйте /start",
+                ERROR_USER_NOT_FOUND,
                 reply_markup=back_keyboard(),
             )
             await state.clear()
@@ -135,7 +152,7 @@ async def set_generation_quality(callback: CallbackQuery, state: FSMContext) -> 
 
     value = callback.data.replace(CallbackData.IMAGE_QUALITY_PREFIX, "")
     if not is_valid_quality(value):
-        await callback.answer("❌ Неверное качество")
+        await callback.answer(CALLBACK_INVALID_QUALITY)
         return
 
     data = await state.get_data()
@@ -145,7 +162,7 @@ async def set_generation_quality(callback: CallbackQuery, state: FSMContext) -> 
     model = data.get("model")
 
     if not prompt or not user_id or not size or not model:
-        await callback.answer("❌ Ошибка состояния")
+        await callback.answer(CALLBACK_STATE_ERROR)
         await state.clear()
         return
 
@@ -182,7 +199,7 @@ async def set_generation_size(callback: CallbackQuery, state: FSMContext) -> Non
 
     value = callback.data.replace(CallbackData.IMAGE_SIZE_PREFIX, "")
     if not is_valid_size(value):
-        await callback.answer("❌ Неверный формат")
+        await callback.answer(CALLBACK_INVALID_SIZE)
         return
 
     data = await state.get_data()
@@ -192,7 +209,7 @@ async def set_generation_size(callback: CallbackQuery, state: FSMContext) -> Non
     model = data.get("model")
 
     if not prompt or not user_id or not quality or not model:
-        await callback.answer("❌ Ошибка состояния")
+        await callback.answer(CALLBACK_STATE_ERROR)
         await state.clear()
         return
 
@@ -238,7 +255,7 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
 
     if not prompt or not user_id or not quality or not size:
         await callback.message.edit_text(
-            "❌ Ошибка: данные сессии потеряны. Попробуйте снова.",
+            ERROR_SESSION_LOST,
             reply_markup=main_menu_keyboard(),
         )
         await state.clear()
@@ -272,7 +289,7 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
                 confirm_callback_data=CallbackData.EXPENSIVE_CONFIRM,
             ),
         )
-        await callback.answer("Подтвердите ещё раз")
+        await callback.answer(CALLBACK_CONFIRM_AGAIN)
         return
     
     session_maker = get_session_maker()
@@ -304,11 +321,9 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
             
         except InsufficientBalanceError as e:
             await callback.message.edit_text(
-                text=(
-                    "Ой! Кажется, токены закончились 📸\n\n"
-                    f"Требуется: {e.required} 🪙\n"
-                    f"Ваш баланс: {e.available} 🪙\n\n"
-                    "Пополни баланс в магазине, чтобы продолжить! 👾"
+                text=ERROR_INSUFFICIENT_BALANCE.format(
+                    required=e.required,
+                    available=e.available,
                 ),
                 reply_markup=insufficient_balance_keyboard(),
             )
@@ -328,15 +343,10 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
         # Task is created, worker will pick it up eventually
     
     await callback.message.edit_text(
-        text=(
-            "✅ <b>Задача создана!</b>\n\n"
-            "⏳ Ваше изображение генерируется...\n"
-            "Я отправлю результат, когда будет готово.\n\n"
-            "Это может занять 10-30 секунд."
-        ),
+        text=GENERATE_TASK_CREATED,
         reply_markup=main_menu_keyboard(),
     )
-    await callback.answer("Генерация запущена! ⏳")
+    await callback.answer(CALLBACK_GENERATION_STARTED)
 
 
 @router.callback_query(
@@ -354,7 +364,7 @@ async def confirm_generation_expensive(callback: CallbackQuery, state: FSMContex
 
     if not prompt or not user_id or not quality or not size:
         await callback.message.edit_text(
-            "❌ Ошибка: данные сессии потеряны. Попробуйте снова.",
+            ERROR_SESSION_LOST,
             reply_markup=main_menu_keyboard(),
         )
         await state.clear()
@@ -389,11 +399,9 @@ async def confirm_generation_expensive(callback: CallbackQuery, state: FSMContex
 
         except InsufficientBalanceError as e:
             await callback.message.edit_text(
-                text=(
-                    "Ой! Кажется, токены закончились 📸\n\n"
-                    f"Требуется: {e.required} 🪙\n"
-                    f"Ваш баланс: {e.available} 🪙\n\n"
-                    "Пополни баланс в магазине, чтобы продолжить! 👾"
+                text=ERROR_INSUFFICIENT_BALANCE.format(
+                    required=e.required,
+                    available=e.available,
                 ),
                 reply_markup=insufficient_balance_keyboard(),
             )
@@ -410,15 +418,10 @@ async def confirm_generation_expensive(callback: CallbackQuery, state: FSMContex
         logger.error(f"Failed to enqueue task {task.id}: {e}")
 
     await callback.message.edit_text(
-        text=(
-            "✅ <b>Задача создана!</b>\n\n"
-            "⏳ Ваше изображение генерируется...\n"
-            "Я отправлю результат, когда будет готово.\n\n"
-            "Это может занять 10-30 секунд."
-        ),
+        text=GENERATE_TASK_CREATED,
         reply_markup=main_menu_keyboard(),
     )
-    await callback.answer("Генерация запущена! ⏳")
+    await callback.answer(CALLBACK_GENERATION_STARTED)
 
 
 @router.callback_query(GenerationStates.confirm_generation, F.data == CallbackData.CANCEL)
@@ -427,16 +430,16 @@ async def cancel_generation(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     
     await callback.message.edit_text(
-        text="❌ Генерация отменена.\n\nВыберите действие:",
+        text=GENERATE_CANCELLED,
         reply_markup=main_menu_keyboard(),
     )
-    await callback.answer("Отменено")
+    await callback.answer(CALLBACK_CANCELLED)
 
 
 @router.message(GenerationStates.waiting_prompt)
 async def invalid_prompt_input(message: Message) -> None:
     """Handle non-text input when waiting for prompt."""
     await message.answer(
-        "❌ Пожалуйста, отправьте текстовое описание изображения.",
+        ERROR_SEND_TEXT_PROMPT,
         reply_markup=back_keyboard(),
     )

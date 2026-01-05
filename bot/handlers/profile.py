@@ -1,7 +1,6 @@
 """Handler for user profile (Личный кабинет)."""
 
 import logging
-from datetime import datetime
 
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardButton
@@ -14,37 +13,24 @@ from bot.keyboards.inline import (
     main_menu_keyboard,
 )
 from bot.services.image_tokens import IMAGE_QUALITY_LABELS
+from bot.utils.messages import (
+    PROFILE_HEADER,
+    PROFILE_HISTORY_HEADER,
+    PROFILE_HISTORY_ITEM,
+    PROFILE_NO_HISTORY,
+    PROFILE_IMAGE_CAPTION,
+    ERROR_USER_NOT_FOUND,
+    ERROR_TASK_NOT_FOUND,
+    ERROR_IMAGE_UNAVAILABLE,
+    ERROR_IMAGE_LOAD_FAILED,
+    format_task_status,
+    format_task_type,
+    format_date,
+)
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="profile")
-
-
-def format_task_status(status: str) -> str:
-    """Format task status for display."""
-    status_map = {
-        "pending": "⏳ В очереди",
-        "processing": "🔄 Обработка",
-        "done": "✅ Готово",
-        "failed": "❌ Ошибка",
-    }
-    return status_map.get(status, status)
-
-
-def format_task_type(task_type: str) -> str:
-    """Format task type for display."""
-    type_map = {
-        "generate": "🎨 Генерация",
-        "edit": "🪄 Редактирование",
-    }
-    return type_map.get(task_type, task_type)
-
-
-def format_date(dt: datetime) -> str:
-    """Format datetime for display."""
-    if dt is None:
-        return "—"
-    return dt.strftime("%d.%m.%Y %H:%M")
 
 
 @router.callback_query(F.data == CallbackData.PROFILE)
@@ -61,7 +47,7 @@ async def show_profile(callback: CallbackQuery) -> None:
         
         if user is None:
             await callback.message.edit_text(
-                "❌ Пользователь не найден. Используйте /start",
+                ERROR_USER_NOT_FOUND,
                 reply_markup=main_menu_keyboard(),
             )
             await callback.answer()
@@ -79,36 +65,34 @@ async def show_profile(callback: CallbackQuery) -> None:
     quality_label = IMAGE_QUALITY_LABELS.get(user.image_quality, user.image_quality)
     
     # Build profile message
-    text = (
-        f"👤 <b>Личный кабинет</b>\n\n"
-        f"<b>Баланс:</b> {user.tokens} 🪙\n"
-        f"<b>Всего генераций:</b> {total_generations}\n"
-        f"<b>Успешных:</b> {successful_generations}\n"
-        f"<b>Модель:</b> {user.selected_model}\n"
-        f"<b>Качество:</b> {quality_label}\n"
-        f"<b>Формат:</b> {user.image_size}\n\n"
+    text = PROFILE_HEADER.format(
+        tokens=user.tokens,
+        total=total_generations,
+        successful=successful_generations,
+        model=user.selected_model,
+        quality=quality_label,
+        size=user.image_size,
     )
     
     if history:
-        text += "<b>📋 Последние генерации:</b>\n\n"
+        text += PROFILE_HISTORY_HEADER
         for i, task in enumerate(history[:3], 1):
             status_icon = format_task_status(task.status)
-            task_type = format_task_type(task.task_type)
+            task_type_str = format_task_type(task.task_type)
             date = format_date(task.created_at)
             
             # Truncate prompt for display
             prompt_preview = task.prompt[:30] + "..." if len(task.prompt) > 30 else task.prompt
             
-            text += (
-                f"{i}. {task_type}\n"
-                f"   {status_icon} | {date}\n"
-                f"   <i>{prompt_preview}</i>\n\n"
+            text += PROFILE_HISTORY_ITEM.format(
+                index=i,
+                task_type=task_type_str,
+                status=status_icon,
+                date=date,
+                prompt=prompt_preview,
             )
     else:
-        text += (
-            "<i>У вас пока нет генераций.</i>\n\n"
-            "Создайте первое изображение в разделе «Создать картинку с нуля»!"
-        )
+        text += PROFILE_NO_HISTORY
 
     # Only back button, no history image buttons
     builder = InlineKeyboardBuilder()
@@ -130,7 +114,7 @@ async def show_history_image(callback: CallbackQuery) -> None:
     try:
         task_id = int(callback.data.split(":")[-1])
     except (ValueError, IndexError):
-        await callback.answer("❌ Ошибка: неверный ID задачи")
+        await callback.answer(ERROR_TASK_NOT_FOUND)
         return
     
     session_maker = get_session_maker()
@@ -140,21 +124,20 @@ async def show_history_image(callback: CallbackQuery) -> None:
         task = await task_repo.get_by_id(task_id)
         
         if task is None:
-            await callback.answer("❌ Задача не найдена")
+            await callback.answer(ERROR_TASK_NOT_FOUND)
             return
         
         if task.status != "done":
-            await callback.answer("❌ Изображение недоступно")
+            await callback.answer(ERROR_IMAGE_UNAVAILABLE)
             return
     
     # Send the image
     try:
-        caption = (
-            f"🖼 <b>Результат</b>\n\n"
-            f"<b>Промпт:</b> <i>{task.prompt[:200]}{'...' if len(task.prompt) > 200 else ''}</i>\n"
-            f"<b>Качество:</b> {task.image_quality}\n"
-            f"<b>Формат:</b> {task.image_size}\n"
-            f"<b>Дата:</b> {format_date(task.created_at)}"
+        caption = PROFILE_IMAGE_CAPTION.format(
+            prompt=task.prompt[:200] + ('...' if len(task.prompt) > 200 else ''),
+            quality=task.image_quality,
+            size=task.image_size,
+            date=format_date(task.created_at),
         )
 
         if task.result_file_id:
@@ -168,13 +151,13 @@ async def show_history_image(callback: CallbackQuery) -> None:
                 caption=caption,
             )
         else:
-            await callback.answer("❌ Изображение недоступно")
+            await callback.answer(ERROR_IMAGE_UNAVAILABLE)
             return
 
         await callback.answer()
     except Exception as e:
         logger.error(f"Failed to send history image: {e}")
-        await callback.answer("❌ Не удалось загрузить изображение")
+        await callback.answer(ERROR_IMAGE_LOAD_FAILED)
 
 
 @router.callback_query(F.data == "history:back")

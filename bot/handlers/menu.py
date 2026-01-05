@@ -17,24 +17,19 @@ from bot.keyboards.inline import (
 from bot.states.generation import GenerationStates, EditStates
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository
+from bot.utils.messages import (
+    MENU_MESSAGE,
+    SHOP_MESSAGE,
+    GENERATE_PROMPT_REQUEST,
+    EDIT_IMAGE_REQUEST,
+    MODEL_SELECTION,
+    MODEL_DISABLED,
+    TRENDS_MENU,
+)
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="menu")
-
-
-MENU_MESSAGE = """
-<b>👋 Привет, {user_name}!</b>
-
-<b>Я Аксель — твой личный ИИ-фотограф.</b>
-
-Я превращаю твои идеи в цифровые шедевры. Хочешь создать арт с нуля или сделаем тебе профессиональную фотосессию? 🎨
-
-💳 <b>Твой баланс:</b> <code>{balance}</code> токенов
-💡 <i>Этого хватит на {max_generations} генераций.</i>
-
-👇 <b>С чего начнем?</b>
-"""
 
 
 @router.callback_query(F.data == CallbackData.BACK_TO_MENU)
@@ -72,11 +67,7 @@ async def menu_generate(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(GenerationStates.waiting_prompt)
     
     await callback.message.edit_text(
-        text=(
-            "🎨 <b>Создание картинки</b>\n\n"
-            "Опишите, какое изображение вы хотите создать.\n\n"
-            "💡 <i>Совет: чем подробнее описание, тем лучше результат!</i>"
-        ),
+        text=GENERATE_PROMPT_REQUEST,
         reply_markup=back_keyboard(),
     )
     await callback.answer()
@@ -88,11 +79,7 @@ async def menu_edit(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(EditStates.waiting_image)
     
     await callback.message.edit_text(
-        text=(
-            "🪄 <b>Редактирование фото</b>\n\n"
-            "Отправьте изображение, которое хотите отредактировать.\n\n"
-            "📎 <i>Поддерживаемые форматы: JPG, PNG, WEBP</i>"
-        ),
+        text=EDIT_IMAGE_REQUEST,
         reply_markup=back_keyboard(),
     )
     await callback.answer()
@@ -119,11 +106,7 @@ async def menu_model(callback: CallbackQuery, state: FSMContext) -> None:
     model_name = model_names.get(current_model, current_model)
     
     await callback.message.edit_text(
-        text=(
-            "🤖 <b>Выбор модели</b>\n\n"
-            f"Текущая модель: <b>{model_name}</b>\n\n"
-            "Выберите модель для генерации изображений:"
-        ),
+        text=MODEL_SELECTION.format(model_name=model_name),
         reply_markup=model_keyboard(current_model),
     )
     await callback.answer()
@@ -143,27 +126,8 @@ async def menu_tokens(callback: CallbackQuery, state: FSMContext) -> None:
         user = await user_repo.get_by_telegram_id(user_tg.id)
         balance = user.tokens if user else 0
     
-    shop_text = (
-        "💎 <b>Магазин Акселя</b>\n\n"
-        f"<b>Твой баланс:</b> {balance} 🪙\n\n"
-        "Псс! Чтобы я мог заправить камеру и создать для тебя магию, нужны токены. "
-        "Выбирай подходящий пакет, и погнали творить!\n\n"
-        "🐣 <b>Starter</b> — 99 ₽ (10 токенов)\n\n"
-        "✨ <b>Small</b> — 249 ₽ (50 токенов)\n"
-        "🏷 <i>Скидка 50% (Экономия 246 ₽)</i>\n\n"
-        "🔥 <b>Medium</b> — 449 ₽ (120 токенов) — <b>ХИТ</b>\n"
-        "🏷 <i>Скидка 62% (Экономия 739 ₽)</i>\n\n"
-        "😎 <b>Pro</b> — 890 ₽ (300 токенов)\n"
-        "🏷 <i>Скидка 70% (Экономия 2080 ₽)</i>\n\n"
-        "👑 <b>Vip</b> — 1690 ₽ (700 токенов)\n"
-        "🏷 <i>Скидка 75% (Экономия 5240 ₽)</i>\n\n"
-        "💳 <b>Оплата:</b> Карты РФ, СБП\n"
-        "✅ Токены не сгорают и подходят для любых моделей\n"
-        "📸 1 фото (Medium) = 5 токенов"
-    )
-    
     await callback.message.edit_text(
-        text=shop_text,
+        text=SHOP_MESSAGE.format(balance=balance),
         reply_markup=tokens_keyboard(),
     )
     await callback.answer()
@@ -175,12 +139,7 @@ async def menu_trends(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     
     await callback.message.edit_text(
-        text=(
-            "💡 <b>Идеи и тренды</b>\n\n"
-            "Выберите готовый шаблон для быстрой генерации:\n\n"
-            "Каждый шаблон содержит оптимизированный промпт "
-            "для создания качественного изображения."
-        ),
+        text=TRENDS_MENU,
         reply_markup=templates_keyboard(),
     )
     await callback.answer()
@@ -208,6 +167,6 @@ async def tokens_coming_soon(callback: CallbackQuery) -> None:
 async def model_disabled(callback: CallbackQuery) -> None:
     """Handle disabled model button (GPT Image 1)."""
     await callback.answer(
-        "Эта модель устарела и больше недоступна. Используйте GPT Image 1.5 🚀",
+        MODEL_DISABLED,
         show_alert=True,
     )

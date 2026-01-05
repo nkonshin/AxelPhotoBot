@@ -14,26 +14,6 @@ logger = logging.getLogger(__name__)
 router = Router(name="tokens")
 
 
-TOKENS_MESSAGE = """
-💰 <b>Купить токены</b>
-
-Ваш текущий баланс: <b>{balance}</b> 🪙
-
-<b>Доступные пакеты:</b>
-
-📦 <b>Стартовый</b> — 50 токенов
-   💵 99 ₽
-
-📦 <b>Оптимальный</b> — 150 токенов
-   💵 249 ₽ <i>(экономия 17%)</i>
-
-📦 <b>Профессиональный</b> — 500 токенов
-   💵 699 ₽ <i>(экономия 30%)</i>
-
-🔜 <i>Оплата скоро будет доступна</i>
-"""
-
-
 # Note: Main tokens menu is handled in menu.py
 # This router handles additional token-related callbacks
 
