@@ -24,9 +24,16 @@ router = Router(name="menu")
 
 
 MENU_MESSAGE = """
-🎨 <b>Главное меню</b>
+<b>👋 Привет, {user_name}!</b>
 
-Выберите действие:
+<b>Я Аксель — твой личный ИИ-фотограф.</b>
+
+Я превращаю твои идеи в цифровые шедевры. Хочешь создать арт с нуля или сделаем тебе профессиональную фотосессию? 🎨
+
+💳 <b>Твой баланс:</b> <code>{balance}</code> токенов
+💡 <i>Этого хватит на {max_generations} генераций.</i>
+
+👇 <b>С чего начнем?</b>
 """
 
 
@@ -36,8 +43,24 @@ async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
     # Clear any FSM state
     await state.clear()
     
+    # Get user info for personalized message
+    user_tg = callback.from_user
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_telegram_id(user_tg.id)
+        balance = user.tokens if user else 0
+    
+    user_name = user_tg.first_name or user_tg.username or "друг"
+    max_generations = balance // 2  # Low quality = 2 tokens
+    
     await callback.message.edit_text(
-        text=MENU_MESSAGE,
+        text=MENU_MESSAGE.format(
+            user_name=user_name,
+            balance=balance,
+            max_generations=max_generations,
+        ),
         reply_markup=main_menu_keyboard(),
     )
     await callback.answer()
@@ -45,7 +68,7 @@ async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == CallbackData.GENERATE)
 async def menu_generate(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle 'Создать картинку' button."""
+    """Handle 'Создать картинку с нуля' button."""
     await state.set_state(GenerationStates.waiting_prompt)
     
     await callback.message.edit_text(
@@ -61,12 +84,12 @@ async def menu_generate(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data == CallbackData.EDIT)
 async def menu_edit(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle 'Редактировать фото' button."""
+    """Handle 'Редактировать твоё фото' button."""
     await state.set_state(EditStates.waiting_image)
     
     await callback.message.edit_text(
         text=(
-            "✏️ <b>Редактирование фото</b>\n\n"
+            "🪄 <b>Редактирование фото</b>\n\n"
             "Отправьте изображение, которое хотите отредактировать.\n\n"
             "📎 <i>Поддерживаемые форматы: JPG, PNG, WEBP</i>"
         ),

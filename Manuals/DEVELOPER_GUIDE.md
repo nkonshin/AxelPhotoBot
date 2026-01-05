@@ -396,7 +396,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     # Первый ряд — 2 кнопки
     builder.row(
         InlineKeyboardButton(text="🎨 Создать", callback_data="menu:generate"),
-        InlineKeyboardButton(text="✏️ Редактировать", callback_data="menu:edit"),
+        InlineKeyboardButton(text="🪄 Редактировать", callback_data="menu:edit"),
     )
     # Второй ряд — 2 кнопки
     builder.row(

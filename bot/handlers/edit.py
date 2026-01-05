@@ -146,7 +146,7 @@ def _build_confirmation_text(
             images_info = f"\n<b>Изображений:</b> {images_count}"
     
     return (
-        f"✏️ <b>Подтверждение редактирования</b>\n\n"
+        f"🪄 <b>Подтверждение редактирования</b>\n\n"
         f"<b>Описание изменений:</b>\n<i>{prompt_preview}</i>\n\n"
         f"<b>Модель:</b> {model}\n"
         f"<b>Качество:</b> {quality_label}\n"
@@ -512,38 +512,24 @@ async def process_additional_photo(message: Message, state: FSMContext) -> None:
     if current_media_group_id:
         import asyncio
         await asyncio.sleep(0.5)
+        # Re-read state to get all photos from media group
         data = await state.get_data()
         source_file_ids = data.get("source_file_ids", [])
     
     photos_count = len(source_file_ids)
     extra_cost = calculate_extra_images_cost(photos_count)
     
-    # Use different text for batch vs single photo
-    if current_media_group_id:
-        added_count = photos_count - (len(data.get("source_file_ids", [])) - 1) if data else 1
-        if extra_cost > 0:
-            text = (
-                f"✅ <b>Добавлено фото!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
-                f"💰 <i>Доп. стоимость: +{extra_cost} 🪙</i>\n\n"
-                "Отправьте описание изменений или добавьте ещё фото."
-            )
-        else:
-            text = (
-                f"✅ <b>Добавлено фото!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
-                "Отправьте описание изменений или добавьте ещё фото."
-            )
+    if extra_cost > 0:
+        text = (
+            f"✅ <b>Добавлено фото!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+            f"💰 <i>Доп. стоимость: +{extra_cost} 🪙</i>\n\n"
+            "Отправьте описание изменений или добавьте ещё фото."
+        )
     else:
-        if extra_cost > 0:
-            text = (
-                f"✅ <b>Фото добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
-                f"💰 <i>Доп. стоимость: +{extra_cost} 🪙</i>\n\n"
-                "Отправьте описание изменений или добавьте ещё фото."
-            )
-        else:
-            text = (
-                f"✅ <b>Фото добавлено!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
-                "Отправьте описание изменений или добавьте ещё фото."
-            )
+        text = (
+            f"✅ <b>Добавлено фото!</b> ({photos_count}/{MAX_EDIT_IMAGES})\n\n"
+            "Отправьте описание изменений или добавьте ещё фото."
+        )
     
     await message.answer(
         text=text,

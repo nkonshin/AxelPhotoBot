@@ -35,7 +35,7 @@ def format_task_type(task_type: str) -> str:
     """Format task type for display."""
     type_map = {
         "generate": "🎨 Генерация",
-        "edit": "✏️ Редактирование",
+        "edit": "🪄 Редактирование",
     }
     return type_map.get(task_type, task_type)
 
@@ -107,7 +107,7 @@ async def show_profile(callback: CallbackQuery) -> None:
     else:
         text += (
             "<i>У вас пока нет генераций.</i>\n\n"
-            "Создайте первое изображение в разделе «Создать картинку»!"
+            "Создайте первое изображение в разделе «Создать картинку с нуля»!"
         )
 
     # Only back button, no history image buttons

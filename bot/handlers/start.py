@@ -25,7 +25,7 @@ WELCOME_MESSAGE = """
 
 <b>Что я умею:</b>
 • 🎨 Создавать картинки по текстовому описанию
-• ✏️ Редактировать твои фотографии
+• 🪄 Редактировать твои фотографии
 • 💡 Предлагать готовые идеи для генерации
 
 🎁 <b>Тебе начислено 7 бесплатных токенов!</b>
@@ -147,17 +147,18 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         existing_user = await user_repo.get_by_telegram_id(user_tg.id)
         is_new_user = existing_user is None
         
+        # Send welcome video for ALL users on every /start
+        if config.welcome_video_file_id:
+            try:
+                # Try to send as video (file_id is from regular video)
+                await message.answer_video(
+                    video=config.welcome_video_file_id,
+                )
+                logger.info(f"Welcome video sent to user {user_tg.id}")
+            except Exception as e:
+                logger.error(f"Failed to send welcome video to {user_tg.id}: {e}")
+        
         if is_new_user:
-            # Send welcome video for ALL new users (before subscription check)
-            if config.welcome_video_file_id:
-                try:
-                    await message.answer_video_note(
-                        video_note=config.welcome_video_file_id,
-                    )
-                    logger.info(f"Welcome video sent to new user {user_tg.id}")
-                except Exception as e:
-                    logger.error(f"Failed to send welcome video to {user_tg.id}: {e}")
-            
             # Check subscription requirement
             subscription_required = await get_subscription_required()
             
@@ -172,6 +173,11 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
                         reply_markup=subscription_keyboard(config.subscription_channel),
                     )
                     return
+            
+            # Check for pending gifts
+            from bot.db.repositories import GiftRepository
+            gift_repo = GiftRepository(session)
+            pending_gifts = await gift_repo.get_pending_gifts_for_username(user_tg.username)
         
         referrer_id = None
         if referrer_telegram_id and referrer_telegram_id != user_tg.id:
@@ -186,17 +192,58 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
             referrer_id=referrer_id,
         )
         
+        # Process pending gifts for new users
+        gift_message = ""
+        if is_new_user and user_tg.username:
+            from bot.db.repositories import GiftRepository
+            gift_repo = GiftRepository(session)
+            pending_gifts = await gift_repo.get_pending_gifts_for_username(user_tg.username)
+            
+            total_gift_tokens = 0
+            gift_senders = []
+            for gift in pending_gifts:
+                total_gift_tokens += gift.tokens_amount
+                # Get sender info
+                sender = await user_repo.get_by_id(gift.sender_id)
+                if sender:
+                    gift_senders.append(f"@{sender.username}" if sender.username else "Аноним")
+                # Mark gift as claimed
+                gift.recipient_id = user.id
+                gift.status = "claimed"
+            
+            if total_gift_tokens > 0:
+                await user_repo.update_tokens(user.id, total_gift_tokens)
+                user.tokens += total_gift_tokens
+                await session.commit()
+                
+                senders_text = ", ".join(gift_senders) if gift_senders else "друга"
+                gift_message = f"\n\n🎁 <b>Вам подарили {total_gift_tokens} токенов от {senders_text}!</b>"
+        
+        # Build welcome message with new format
+        user_name = user_tg.first_name or user_tg.username or "друг"
+        balance = user.tokens
+        max_generations = balance // 2  # Low quality = 2 tokens
+        
+        text = (
+            f"<b>👋 Привет, {user_name}!</b>\n\n"
+            f"<b>Я Аксель — твой личный ИИ-фотограф.</b>\n\n"
+            f"Я превращаю твои идеи в цифровые шедевры. "
+            f"Хочешь создать арт с нуля или сделаем тебе профессиональную фотосессию? 🎨\n\n"
+            f"💳 <b>Твой баланс:</b> <code>{balance}</code> токенов\n"
+            f"💡 <i>Этого хватит на {max_generations} генераций.</i>"
+            f"{gift_message}\n\n"
+            f"👇 <b>С чего начнем?</b>"
+        )
+        
         if created:
             logger.info(
                 f"New user registered: {user_tg.id} (@{user_tg.username})"
                 + (f" referred by {referrer_telegram_id}" if referrer_id else "")
             )
-            text = WELCOME_MESSAGE.format(tokens=user.tokens)
         else:
             logger.info(
                 f"Existing user started bot: {user_tg.id} (@{user_tg.username})"
             )
-            text = WELCOME_BACK_MESSAGE.format(tokens=user.tokens)
     
     await message.answer(
         text=text,

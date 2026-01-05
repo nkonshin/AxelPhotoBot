@@ -141,6 +141,9 @@ class Payment(Base):
     )  # pending, waiting_for_capture, succeeded, canceled
     paid: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     confirmation_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Gift fields (optional - if this is a gift payment)
+    is_gift: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    gift_recipient_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -150,3 +153,38 @@ class Payment(Base):
     
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="selectin")
+
+
+class Gift(Base):
+    """Gift model for token gifts between users."""
+    
+    __tablename__ = "gifts"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sender_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+    recipient_username: Mapped[str] = mapped_column(
+        String(255), nullable=False, index=True
+    )  # @username without @
+    recipient_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )  # Set when recipient claims the gift
+    payment_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("payments.id"), nullable=True
+    )
+    package: Mapped[str] = mapped_column(String(50), nullable=False)
+    tokens_amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(30), default="pending", nullable=False
+    )  # pending (waiting payment), paid (waiting claim), claimed, expired
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    
+    # Relationships
+    sender: Mapped["User"] = relationship("User", foreign_keys=[sender_id], lazy="selectin")
+    recipient: Mapped[Optional["User"]] = relationship("User", foreign_keys=[recipient_id], lazy="selectin")

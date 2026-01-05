@@ -75,8 +75,8 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     Create the main menu keyboard with 7 buttons.
     
     Layout (full width buttons except middle row):
-    [🎨 Создать картинку        ]
-    [✏️ Редактировать фото      ]
+    [🎨 Создать картинку с нуля        ]
+    [🪄 Редактировать твоё фото      ]
     [🤖 Выбрать модель          ]
     [👤 Личный кабинет] [💰 Купить токены]
     [🎁 Подарить фотосессию     ]
@@ -87,13 +87,13 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     # Full width buttons
     builder.row(
         InlineKeyboardButton(
-            text="🎨 Создать картинку",
+            text="🎨 Создать картинку с нуля",
             callback_data=CallbackData.GENERATE,
         ),
     )
     builder.row(
         InlineKeyboardButton(
-            text="✏️ Редактировать фото",
+            text="🪄 Редактировать твоё фото",
             callback_data=CallbackData.EDIT,
         ),
     )

@@ -401,7 +401,7 @@ async def _send_result_to_user(
         logger.info(f"Task {task.id}: DB query took {db_time:.2f}s")
         
         # Send image to user
-        task_type_emoji = "🎨" if task.task_type == "generate" else "✏️"
+        task_type_emoji = "🎨" if task.task_type == "generate" else "🪄"
         task_type_text = "Картинка создана" if task.task_type == "generate" else "Фото отредактировано"
         prompt_preview = task.prompt[:300] + "..." if len(task.prompt) > 300 else task.prompt
         quality_label = IMAGE_QUALITY_LABELS.get(task.image_quality, task.image_quality)

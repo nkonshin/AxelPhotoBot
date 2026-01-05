@@ -17,6 +17,7 @@ from bot.bot import get_bot, get_dispatcher, close_bot
 from bot.config import config
 from bot.db.database import init_db, close_db, get_session_maker
 from bot.handlers import register_all_handlers
+from sqlalchemy import select, desc
 
 # Configure logging
 logging.basicConfig(
@@ -388,49 +389,176 @@ async def yookassa_webhook(request: Request):
             
             # If payment succeeded and wasn't processed before
             if event == "payment.succeeded" and paid and old_status != "succeeded":
-                # Add tokens to user
+                # Check if this is a gift payment
+                is_gift = payment.is_gift if hasattr(payment, 'is_gift') else False
+                
+                if is_gift and payment.gift_recipient_username:
+                    # Handle gift payment
+                    from bot.db.repositories import GiftRepository
+                    gift_repo = GiftRepository(session)
+                    
+                    # Find the gift by recipient username and sender
+                    from bot.db.models import Gift
+                    result = await session.execute(
+                        select(Gift)
+                        .where(Gift.sender_id == payment.user_id)
+                        .where(Gift.recipient_username == payment.gift_recipient_username)
+                        .where(Gift.status == "pending")
+                        .order_by(desc(Gift.created_at))
+                        .limit(1)
+                    )
+                    gift = result.scalar_one_or_none()
+                    
+                    if gift:
+                        gift.status = "paid"
+                        
+                        # Check if recipient already exists
+                        recipient = await user_repo.get_by_username(gift.recipient_username)
+                        sender = await user_repo.get_by_id(payment.user_id)
+                        
+                        if recipient:
+                            # Recipient exists - add tokens immediately
+                            await user_repo.update_tokens(recipient.id, gift.tokens_amount)
+                            gift.status = "claimed"
+                            gift.recipient_id = recipient.id
+                            
+                            logger.info(
+                                f"Gift payment {payment_id} succeeded: "
+                                f"{gift.tokens_amount} tokens to @{gift.recipient_username}"
+                            )
+                            
+                            # Notify recipient
+                            try:
+                                bot = get_bot()
+                                sender_name = f"@{sender.username}" if sender and sender.username else "друга"
+                                new_balance = recipient.tokens + gift.tokens_amount
+                                
+                                await bot.send_message(
+                                    chat_id=recipient.telegram_id,
+                                    text=(
+                                        f"🎁 <b>Вам подарили токены!</b>\n\n"
+                                        f"<b>От:</b> {sender_name}\n"
+                                        f"<b>Пакет:</b> {SHOP_PACKAGES.get(gift.package, {}).get('name', gift.package)}\n"
+                                        f"<b>Токенов:</b> +{gift.tokens_amount} 🪙\n"
+                                        f"<b>Ваш баланс:</b> {new_balance} 🪙\n\n"
+                                        "Токены уже на вашем балансе! 🎉"
+                                    ),
+                                    parse_mode="HTML",
+                                )
+                            except Exception as e:
+                                logger.error(f"Failed to notify gift recipient: {e}")
+                        else:
+                            logger.info(
+                                f"Gift payment {payment_id} succeeded: "
+                                f"{gift.tokens_amount} tokens waiting for @{gift.recipient_username}"
+                            )
+                        
+                        # Notify sender
+                        try:
+                            bot = get_bot()
+                            status_text = "уже получил токены! 🎉" if gift.status == "claimed" else "получит токены при входе в бота 📩"
+                            
+                            await bot.send_message(
+                                chat_id=sender.telegram_id if sender else payment.user_id,
+                                text=(
+                                    f"✅ <b>Подарок оплачен!</b>\n\n"
+                                    f"<b>Получатель:</b> @{gift.recipient_username}\n"
+                                    f"<b>Пакет:</b> {SHOP_PACKAGES.get(gift.package, {}).get('name', gift.package)}\n"
+                                    f"<b>Токенов:</b> {gift.tokens_amount} 🪙\n\n"
+                                    f"<i>Статус: {status_text}</i>\n\n"
+                                    "Спасибо за подарок! 💝"
+                                ),
+                                parse_mode="HTML",
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to notify gift sender: {e}")
+                        
+                        # Notify admins
+                        try:
+                            from bot.services.admin_notify import notify_admins
+                            await notify_admins(
+                                f"🎁 <b>Новый подарок!</b>\n\n"
+                                f"От: @{sender.username or '—'} ({sender.telegram_id if sender else '—'})\n"
+                                f"Кому: @{gift.recipient_username}\n"
+                                f"Пакет: {SHOP_PACKAGES.get(gift.package, {}).get('name', gift.package)}\n"
+                                f"Сумма: {payment.amount_value} ₽\n"
+                                f"Токены: {gift.tokens_amount} 🪙\n"
+                                f"Статус: {'Получен' if gift.status == 'claimed' else 'Ожидает'}",
+                                title="Подарок"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to notify admins about gift: {e}")
+                else:
+                    # Regular payment - add tokens to user
+                    user = await user_repo.get_by_id(payment.user_id)
+                    
+                    if user:
+                        await user_repo.update_tokens(user.id, payment.tokens_amount)
+                        logger.info(
+                            f"Payment {payment_id} succeeded: added {payment.tokens_amount} tokens "
+                            f"to user {user.telegram_id}"
+                        )
+                        
+                        # Send notification to user
+                        try:
+                            bot = get_bot()
+                            package_name = SHOP_PACKAGES.get(payment.package, {}).get("name", payment.package)
+                            new_balance = user.tokens + payment.tokens_amount
+                            
+                            await bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=(
+                                    "✅ <b>Оплата прошла успешно!</b>\n\n"
+                                    f"<b>Пакет:</b> {package_name}\n"
+                                    f"<b>Зачислено:</b> +{payment.tokens_amount} 🪙\n"
+                                    f"<b>Ваш баланс:</b> {new_balance} 🪙\n\n"
+                                    "Спасибо за покупку! Теперь можно творить магию 🎨"
+                                ),
+                                parse_mode="HTML",
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to send payment notification to user: {e}")
+                        
+                        # Notify admins
+                        try:
+                            from bot.services.admin_notify import notify_admins
+                            await notify_admins(
+                                f"💰 <b>Новая оплата!</b>\n\n"
+                                f"Пользователь: @{user.username or '—'} ({user.telegram_id})\n"
+                                f"Пакет: {SHOP_PACKAGES.get(payment.package, {}).get('name', payment.package)}\n"
+                                f"Сумма: {payment.amount_value} ₽\n"
+                                f"Токены: +{payment.tokens_amount} 🪙",
+                                title="Оплата"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to notify admins: {e}")
+            
+            # If payment was canceled
+            elif event == "payment.canceled" and old_status != "canceled":
                 user = await user_repo.get_by_id(payment.user_id)
                 
                 if user:
-                    await user_repo.update_tokens(user.id, payment.tokens_amount)
                     logger.info(
-                        f"Payment {payment_id} succeeded: added {payment.tokens_amount} tokens "
-                        f"to user {user.telegram_id}"
+                        f"Payment {payment_id} canceled for user {user.telegram_id}"
                     )
                     
-                    # Send notification to user
+                    # Send notification to user with shop buttons
                     try:
                         bot = get_bot()
-                        package_name = SHOP_PACKAGES.get(payment.package, {}).get("name", payment.package)
-                        new_balance = user.tokens + payment.tokens_amount
+                        from bot.keyboards.inline import tokens_keyboard
                         
                         await bot.send_message(
                             chat_id=user.telegram_id,
                             text=(
-                                "✅ <b>Оплата прошла успешно!</b>\n\n"
-                                f"<b>Пакет:</b> {package_name}\n"
-                                f"<b>Зачислено:</b> +{payment.tokens_amount} 🪙\n"
-                                f"<b>Ваш баланс:</b> {new_balance} 🪙\n\n"
-                                "Спасибо за покупку! Теперь можно творить магию 🎨"
+                                "❌ <b>Платеж не завершен</b>\n\n"
+                                "Покупка отменена, баланс остался прежним.\n\n"
+                                "Если возникла ошибка — напишите нам в поддержку."
                             ),
+                            reply_markup=tokens_keyboard(),
                             parse_mode="HTML",
                         )
                     except Exception as e:
-                        logger.error(f"Failed to send payment notification to user: {e}")
-                    
-                    # Notify admins
-                    try:
-                        from bot.services.admin_notify import notify_admins
-                        await notify_admins(
-                            f"💰 <b>Новая оплата!</b>\n\n"
-                            f"Пользователь: @{user.username or '—'} ({user.telegram_id})\n"
-                            f"Пакет: {SHOP_PACKAGES.get(payment.package, {}).get('name', payment.package)}\n"
-                            f"Сумма: {payment.amount_value} ₽\n"
-                            f"Токены: +{payment.tokens_amount} 🪙",
-                            title="Оплата"
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to notify admins: {e}")
+                        logger.error(f"Failed to send cancel notification to user: {e}")
             
             await session.commit()
         

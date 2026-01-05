@@ -528,3 +528,107 @@ class PaymentRepository:
         await self.session.refresh(payment)
         
         return payment
+
+
+class GiftRepository:
+    """Repository for Gift CRUD operations."""
+    
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def create(
+        self,
+        sender_id: int,
+        recipient_username: str,
+        package: str,
+        tokens_amount: int,
+        payment_id: Optional[int] = None,
+        status: str = "pending",
+    ) -> "Gift":
+        """Create a new gift record."""
+        from bot.db.models import Gift
+        
+        # Remove @ if present
+        recipient_username = recipient_username.lstrip("@")
+        
+        gift = Gift(
+            sender_id=sender_id,
+            recipient_username=recipient_username,
+            package=package,
+            tokens_amount=tokens_amount,
+            payment_id=payment_id,
+            status=status,
+        )
+        self.session.add(gift)
+        await self.session.commit()
+        await self.session.refresh(gift)
+        
+        return gift
+    
+    async def get_by_id(self, gift_id: int) -> Optional["Gift"]:
+        """Get gift by ID."""
+        from bot.db.models import Gift
+        
+        result = await self.session.execute(
+            select(Gift).where(Gift.id == gift_id)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_pending_gifts_for_username(self, username: str) -> List["Gift"]:
+        """Get all pending (paid but unclaimed) gifts for a username."""
+        from bot.db.models import Gift
+        
+        if not username:
+            return []
+        
+        # Remove @ if present
+        username = username.lstrip("@")
+        
+        result = await self.session.execute(
+            select(Gift)
+            .where(Gift.recipient_username == username)
+            .where(Gift.status == "paid")
+            .order_by(Gift.created_at)
+        )
+        return list(result.scalars().all())
+    
+    async def update_status(
+        self,
+        gift_id: int,
+        status: str,
+        recipient_id: Optional[int] = None,
+    ) -> Optional["Gift"]:
+        """Update gift status."""
+        from bot.db.models import Gift
+        from datetime import datetime
+        
+        result = await self.session.execute(
+            select(Gift).where(Gift.id == gift_id)
+        )
+        gift = result.scalar_one_or_none()
+        
+        if gift is None:
+            return None
+        
+        gift.status = status
+        if recipient_id:
+            gift.recipient_id = recipient_id
+        if status == "claimed":
+            gift.claimed_at = datetime.utcnow()
+        
+        await self.session.commit()
+        await self.session.refresh(gift)
+        
+        return gift
+    
+    async def get_user_sent_gifts(self, sender_id: int, limit: int = 10) -> List["Gift"]:
+        """Get gifts sent by a user."""
+        from bot.db.models import Gift
+        
+        result = await self.session.execute(
+            select(Gift)
+            .where(Gift.sender_id == sender_id)
+            .order_by(desc(Gift.created_at))
+            .limit(limit)
+        )
+        return list(result.scalars().all())

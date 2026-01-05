@@ -4,7 +4,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class GenerationStates(StatesGroup):
-    """States for the image generation flow (Создать картинку)."""
+    """States for the image generation flow (Создать картинку с нуля)."""
     
     # User is entering the text prompt for generation
     waiting_prompt = State()
@@ -14,7 +14,7 @@ class GenerationStates(StatesGroup):
 
 
 class EditStates(StatesGroup):
-    """States for the image editing flow (Редактировать фото)."""
+    """States for the image editing flow (Редактировать твоё фото)."""
     
     # User is uploading images to edit (supports multiple)
     waiting_image = State()
