@@ -30,7 +30,6 @@ def register_all_handlers(dp: Dispatcher) -> None:
     """
     # Register routers in order of specificity
     dp.include_router(start_router)      # /start command
-    dp.include_router(admin_router)      # Admin commands (/admin, /stats, etc.)
     dp.include_router(support_router)    # /support command
     dp.include_router(invite_router)     # /invite command
     dp.include_router(guide_router)      # /guide command and button
@@ -45,6 +44,7 @@ def register_all_handlers(dp: Dispatcher) -> None:
     dp.include_router(model_router)      # Model callbacks
     dp.include_router(tokens_router)     # Tokens callbacks
     dp.include_router(menu_router)       # Main menu navigation
+    dp.include_router(admin_router)      # Admin commands (last, after FSM handlers)
     dp.include_router(errors_router)     # Global error handler (last)
 
 
