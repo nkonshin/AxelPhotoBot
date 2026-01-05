@@ -251,12 +251,18 @@ pytest tests/test_db.py tests/test_services.py
 ## Docker команды
 
 ```bash
-# Просмотр логов всех сервисов
-docker-compose logs -f
+# Просмотр логов (чистые, без ошибок docker-compose)
+make logs              # Логи app (рекомендуется)
+make logs-worker       # Логи worker
+make logs-db           # Логи PostgreSQL
+make logs-redis        # Логи Redis
 
-# Логи конкретного сервиса
-docker-compose logs -f app
-docker-compose logs -f worker
+# Или напрямую через docker
+docker logs -f telegram_bot_app
+docker logs -f telegram_bot_worker
+
+# Все логи через docker-compose (может показывать ошибки docker-compose)
+docker-compose logs -f
 
 # Перезапуск сервиса
 docker-compose restart app
@@ -278,6 +284,7 @@ docker-compose build --no-cache
 
 # Очистка volumes (удалит данные БД!)
 docker-compose down -v
+
 ```
 
 ## Структура проекта

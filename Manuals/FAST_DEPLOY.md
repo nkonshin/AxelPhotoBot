@@ -247,8 +247,18 @@ docker-compose restart worker
 ## 🎓 Дополнительные команды
 
 ```bash
-# Просмотр логов в реальном времени
-docker-compose logs -f app
+# Просмотр логов (чистые, без ошибок docker-compose)
+make logs              # Логи app (рекомендуется)
+make logs-worker       # Логи worker
+make logs-db           # Логи PostgreSQL
+make logs-redis        # Логи Redis
+
+# Или напрямую через docker
+docker logs -f telegram_bot_app
+docker logs -f telegram_bot_worker
+
+# Все логи через docker-compose (может показывать ошибки docker-compose)
+make logs-all
 
 # Проверка статуса
 docker-compose ps

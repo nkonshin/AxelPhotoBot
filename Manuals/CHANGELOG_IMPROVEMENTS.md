@@ -2,6 +2,82 @@
 
 ## Дата: 5 января 2026
 
+### 33. Исправлен баг с редактированием фото
+
+**Файлы:**
+- `bot/handlers/admin.py` — использован `StateFilter(None)` для file_id хендлеров
+- `bot/handlers/__init__.py` — `admin_router` уже был в конце списка
+
+**Проблема:** После добавления file_id helper для админов, редактирование фото перестало работать. Админские хендлеры перехватывали все фото до того, как они доходили до хендлеров редактирования.
+
+**Решение:** Использован `StateFilter(None)` в декораторах админских хендлеров. Теперь они срабатывают **только когда пользователь НЕ в FSM state**. Когда пользователь в состоянии редактирования (`EditStates.waiting_image`), админские хендлеры игнорируются, и фото обрабатываются хендлерами редактирования.
+
+```python
+# Было:
+@router.message(F.photo)
+async def handle_photo_file_id(message: Message, state: FSMContext):
+    if not config.is_admin(message.from_user.id):
+        return
+    current_state = await state.get_state()
+    if current_state is not None:
+        return  # ❌ Хендлер всё равно "обработал" сообщение
+    ...
+
+# Стало:
+@router.message(
+    StateFilter(None),  # ✅ Хендлер вообще не срабатывает если есть state
+    F.photo,
+    lambda m: m.from_user and config.is_admin(m.from_user.id)
+)
+async def handle_photo_file_id(message: Message):
+    ...
+```
+
+**Как работает:**
+1. Пользователь в FSM state (редактирование) → админский хендлер не рассматривается → фото идёт к edit хендлеру ✅
+2. Админ вне FSM state → админский хендлер срабатывает → показывает file_id ✅
+
+### 34. Улучшены команды для просмотра логов
+
+**Файлы:**
+- `Makefile` — обновлены команды для логов
+- `README.md` — обновлена секция Docker команд
+- `Manuals/FAST_DEPLOY.md` — обновлена секция с логами
+- `Manuals/DEPLOYMENT.md` — обновлена секция мониторинга
+
+**Проблема:** При использовании `docker-compose logs -f` в логах появляется ошибка:
+```
+Exception in thread Thread-5 (watch_events):
+KeyError: 'id'
+```
+
+Это баг в старых версиях `docker-compose` при мониторинге событий контейнеров. Не влияет на работу, но засоряет логи.
+
+**Решение:** Добавлены команды для чистого просмотра логов через `docker logs`:
+
+```bash
+# Чистые логи (рекомендуется)
+make logs              # Логи app
+make logs-worker       # Логи worker
+make logs-db           # Логи PostgreSQL
+make logs-redis        # Логи Redis
+
+# Или напрямую
+docker logs -f telegram_bot_app
+docker logs -f telegram_bot_worker
+
+# Старый способ (с ошибками docker-compose)
+make logs-all
+docker-compose logs -f
+```
+
+**Альтернативные решения:**
+1. Обновить docker-compose до версии 2.x: `sudo apt-get install docker-compose-plugin`
+2. Использовать `docker compose` (v2, без дефиса) вместо `docker-compose`
+3. Игнорировать ошибку: `docker-compose logs -f 2>/dev/null`
+
+---
+
 ### 32. Исправление багов (6 issues)
 
 #### 32.1 Обработка ошибок модерации OpenAI

@@ -149,17 +149,21 @@ docker-compose logs -f worker
 ### Просмотр логов
 
 ```bash
-# Все логи
+# Чистые логи (рекомендуется, без ошибок docker-compose)
+make logs              # Логи app
+make logs-worker       # Логи worker
+make logs-db           # Логи PostgreSQL
+make logs-redis        # Логи Redis
+
+# Или напрямую через docker
+docker logs -f telegram_bot_app
+docker logs -f telegram_bot_worker
+
+# Все логи через docker-compose (может показывать ошибки docker-compose)
 docker-compose logs -f
 
-# Только приложение
-docker-compose logs -f app
-
-# Только worker
-docker-compose logs -f worker
-
 # Последние 100 строк
-docker-compose logs --tail=100
+docker logs --tail=100 telegram_bot_app
 ```
 
 ### Проверка ресурсов

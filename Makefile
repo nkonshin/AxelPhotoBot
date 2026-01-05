@@ -38,14 +38,23 @@ restart-app: ## Перезапустить только app
 restart-worker: ## Перезапустить только worker
 	docker-compose restart worker
 
-logs: ## Показать логи всех сервисов
+logs: ## Показать логи всех сервисов (чистые, без ошибок docker-compose)
+	docker logs -f telegram_bot_app
+
+logs-all: ## Показать логи всех сервисов через docker-compose
 	docker-compose logs -f
 
 logs-app: ## Показать логи FastAPI приложения
-	docker-compose logs -f app
+	docker logs -f telegram_bot_app
 
 logs-worker: ## Показать логи RQ Worker
-	docker-compose logs -f worker
+	docker logs -f telegram_bot_worker
+
+logs-db: ## Показать логи PostgreSQL
+	docker logs -f telegram_bot_db
+
+logs-redis: ## Показать логи Redis
+	docker logs -f telegram_bot_redis
 
 shell: ## Открыть shell в контейнере приложения
 	docker-compose exec app bash
