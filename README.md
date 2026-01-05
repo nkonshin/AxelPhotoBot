@@ -1,4 +1,5 @@
-# NanoBananaBot "Аксель"
+# Аксель AI | Нейро-фото
+@AxelPhotoBot
 
 Telegram-бот для генерации и редактирования AI-изображений с использованием OpenAI Images API.
 
