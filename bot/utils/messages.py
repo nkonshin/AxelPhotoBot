@@ -78,12 +78,12 @@ SHOP_MESSAGE = """
 💎 <b>Магазин Акселя</b>
 
 Твой баланс: <code>{balance}</code> 🪙
-<b>Курс:</b> 1 фото = 5 токенов
+<b>Курс:</b> 1 фото = 2 токена
 
 🚀 <b>Выбери свой запас энергии:</b>
 
 🐣 <b>Starter — 99₽</b>
-└ 10 токенов (~2 фото)
+└ 10 токенов (~5 фото)
 
 ✨ <b>Small — 249₽</b>
 └ 50 токенов <i>(скидка 50%)</i>
@@ -272,11 +272,15 @@ PROFILE_HEADER = """
 Привет, <b>{user_name}</b>!
 Здесь твои достижения и настройки:
 
-👛 <b>Баланс:</b> <code>{tokens}</code> токенов
+{level_info}
+
+� <b>оБаланс:</b> <code>{tokens}</code> токенов
 🚀 <b>Творческий опыт:</b> <code>{total}</code> генераций
 ✨ <b>Модель:</b> <code>{model}</code>
 🎨 <b>Качество:</b> <code>{quality}</code>
 📐 <b>Формат:</b> <code>{size}</code>
+
+{achievements_info}
 
 ━━━━━━━━━━━━━━━━━━
 📋 <b>История последних шедевров:</b>
@@ -634,3 +638,123 @@ def format_date(dt) -> str:
     if dt is None:
         return "—"
     return dt.strftime("%d.%m.%Y %H:%M")
+
+
+# =============================================================================
+# GAMIFICATION SYSTEM
+# =============================================================================
+
+# Level thresholds (generations needed to reach each level)
+LEVELS = [
+    {"name": "🌱 Новичок", "threshold": 0, "next_threshold": 5},
+    {"name": "🎨 Любитель", "threshold": 5, "next_threshold": 15},
+    {"name": "✨ Творец", "threshold": 15, "next_threshold": 30},
+    {"name": "🔥 Мастер", "threshold": 30, "next_threshold": 50},
+    {"name": "💎 Эксперт", "threshold": 50, "next_threshold": 100},
+    {"name": "👑 Легенда", "threshold": 100, "next_threshold": None},
+]
+
+# Achievements
+ACHIEVEMENTS = [
+    {"id": "first_gen", "name": "Первый шаг", "emoji": "🎯", "threshold": 1, "description": "Создай первую картинку"},
+    {"id": "gen_10", "name": "Разгон", "emoji": "🚀", "threshold": 10, "description": "Создай 10 картинок"},
+    {"id": "gen_25", "name": "Продуктивность", "emoji": "⚡️", "threshold": 25, "description": "Создай 25 картинок"},
+    {"id": "gen_50", "name": "Профессионал", "emoji": "💪", "threshold": 50, "description": "Создай 50 картинок"},
+    {"id": "gen_100", "name": "Мастер ИИ", "emoji": "🏆", "threshold": 100, "description": "Создай 100 картинок"},
+]
+
+
+def get_user_level(total_generations: int) -> dict:
+    """
+    Get user's current level based on total generations.
+    
+    Returns:
+        dict with: name, threshold, next_threshold, progress, progress_percent
+    """
+    current_level = LEVELS[0]
+    
+    for level in LEVELS:
+        if total_generations >= level["threshold"]:
+            current_level = level
+        else:
+            break
+    
+    # Calculate progress to next level
+    if current_level["next_threshold"] is None:
+        # Max level reached
+        progress = 0
+        progress_percent = 100
+    else:
+        progress = total_generations - current_level["threshold"]
+        needed = current_level["next_threshold"] - current_level["threshold"]
+        progress_percent = int((progress / needed) * 100)
+    
+    return {
+        "name": current_level["name"],
+        "threshold": current_level["threshold"],
+        "next_threshold": current_level["next_threshold"],
+        "progress": progress,
+        "progress_percent": progress_percent,
+    }
+
+
+def get_user_achievements(total_generations: int) -> list:
+    """
+    Get list of user's unlocked achievements.
+    
+    Returns:
+        List of achievement dicts with 'unlocked' flag
+    """
+    achievements = []
+    
+    for achievement in ACHIEVEMENTS:
+        unlocked = total_generations >= achievement["threshold"]
+        achievements.append({
+            **achievement,
+            "unlocked": unlocked,
+        })
+    
+    return achievements
+
+
+def format_level_info(total_generations: int) -> str:
+    """Format level information for profile."""
+    level = get_user_level(total_generations)
+    
+    if level["next_threshold"] is None:
+        # Max level
+        return f"🏆 <b>Уровень:</b> {level['name']} (максимальный уровень!)"
+    
+    # Progress bar (10 segments)
+    filled = int(level["progress_percent"] / 10)
+    empty = 10 - filled
+    progress_bar = "█" * filled + "░" * empty
+    
+    next_level_name = None
+    for lvl in LEVELS:
+        if lvl["threshold"] == level["next_threshold"]:
+            next_level_name = lvl["name"]
+            break
+    
+    return (
+        f"🏆 <b>Уровень:</b> {level['name']}\n"
+        f"📊 <b>Прогресс:</b> [{progress_bar}] {level['progress_percent']}%\n"
+        f"💫 <i>До уровня {next_level_name}: {level['next_threshold'] - total_generations} генераций</i>\n"
+    )
+
+
+def format_achievements_info(total_generations: int) -> str:
+    """Format achievements information for profile."""
+    achievements = get_user_achievements(total_generations)
+    unlocked_count = sum(1 for a in achievements if a["unlocked"])
+    total_count = len(achievements)
+    
+    lines = [f"🎖 <b>Достижения:</b> {unlocked_count}/{total_count}\n"]
+    
+    for achievement in achievements:
+        if achievement["unlocked"]:
+            lines.append(f"✅ {achievement['emoji']} <b>{achievement['name']}</b>")
+        else:
+            lines.append(f"🔒 {achievement['emoji']} {achievement['name']} ({achievement['threshold']} генераций)")
+    
+    return "\n".join(lines)

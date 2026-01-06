@@ -134,6 +134,25 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 model=task.model or "gpt-image-1",
             )
             
+            # Update progress: preparing request
+            if animation_message_id and telegram_id:
+                await _update_progress_message(
+                    telegram_id,
+                    animation_message_id,
+                    "⏳ <b>Генерация началась...</b>\n\n🎨 Отправляю запрос на сервер..."
+                )
+            
+            # Small delay to show progress
+            await asyncio.sleep(1)
+            
+            # Update progress: generating
+            if animation_message_id and telegram_id:
+                await _update_progress_message(
+                    telegram_id,
+                    animation_message_id,
+                    "⏳ <b>Генерация в процессе...</b>\n\n✨ Создаю изображение...\n<i>Это может занять 10-30 секунд</i>"
+                )
+            
             # Generate or edit based on task type
             result: GenerationResult
             if task.task_type == "generate":
@@ -157,6 +176,14 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 )
             else:
                 raise ValueError(f"Unknown task type: {task.task_type}")
+            
+            # Update progress: finalizing
+            if animation_message_id and telegram_id:
+                await _update_progress_message(
+                    telegram_id,
+                    animation_message_id,
+                    "⏳ <b>Почти готово...</b>\n\n🎉 Отправляю результат..."
+                )
             
             # Delete animation message
             if animation_message_id and telegram_id:
@@ -294,7 +321,8 @@ async def _send_animation_message(telegram_id: int) -> Optional[int]:
         
         message = await bot.send_message(
             chat_id=telegram_id,
-            text="⏳ Генерирую...",
+            text="⏳ <b>Генерация началась...</b>\n\n🎨 Создаю изображение...",
+            parse_mode="HTML",
         )
         
         await bot.session.close()
@@ -304,6 +332,33 @@ async def _send_animation_message(telegram_id: int) -> Optional[int]:
     except Exception as e:
         logger.error(f"Failed to send animation message: {e}")
         return None
+
+
+async def _update_progress_message(telegram_id: int, message_id: int, text: str) -> None:
+    """
+    Update progress message during generation.
+    
+    Args:
+        telegram_id: User's Telegram ID
+        message_id: Message ID to update
+        text: New text for the message
+    """
+    try:
+        from aiogram import Bot
+        
+        bot = Bot(token=config.bot_token)
+        
+        await bot.edit_message_text(
+            chat_id=telegram_id,
+            message_id=message_id,
+            text=text,
+            parse_mode="HTML",
+        )
+        
+        await bot.session.close()
+    
+    except Exception as e:
+        logger.error(f"Failed to update progress message: {e}")
 
 
 async def _delete_animation_message(telegram_id: int, message_id: int) -> None:

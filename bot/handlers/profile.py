@@ -25,6 +25,8 @@ from bot.utils.messages import (
     format_task_status,
     format_task_type,
     format_date,
+    format_level_info,
+    format_achievements_info,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,6 +65,10 @@ async def show_profile(callback: CallbackQuery) -> None:
     # Format quality label
     quality_label = IMAGE_QUALITY_LABELS.get(user.image_quality, user.image_quality)
     
+    # Get gamification info
+    level_info = format_level_info(total_generations)
+    achievements_info = format_achievements_info(total_generations)
+    
     # Build profile message
     text = PROFILE_HEADER.format(
         user_name=user.username or user.first_name or "Пользователь",
@@ -71,6 +77,8 @@ async def show_profile(callback: CallbackQuery) -> None:
         model=user.selected_model,
         quality=quality_label,
         size=user.image_size,
+        level_info=level_info,
+        achievements_info=achievements_info,
     )
     
     if history:
