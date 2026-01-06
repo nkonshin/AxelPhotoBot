@@ -35,6 +35,9 @@ router = Router(name="menu")
 @router.callback_query(F.data == CallbackData.BACK_TO_MENU)
 async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle back to menu button - return to main menu."""
+    # Answer callback immediately to prevent timeout
+    await callback.answer()
+    
     # Clear any FSM state
     await state.clear()
     
@@ -58,36 +61,42 @@ async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
         ),
         reply_markup=main_menu_keyboard(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CallbackData.GENERATE)
 async def menu_generate(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle 'Создать картинку с нуля' button."""
+    # Answer callback immediately to prevent timeout
+    await callback.answer()
+    
     await state.set_state(GenerationStates.waiting_prompt)
     
     await callback.message.edit_text(
         text=GENERATE_PROMPT_REQUEST,
         reply_markup=back_keyboard(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CallbackData.EDIT)
 async def menu_edit(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle 'Редактировать твоё фото' button."""
+    # Answer callback immediately to prevent timeout
+    await callback.answer()
+    
     await state.set_state(EditStates.waiting_image)
     
     await callback.message.edit_text(
         text=EDIT_IMAGE_REQUEST,
         reply_markup=back_keyboard(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CallbackData.MODEL)
 async def menu_model(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle 'Выбрать модель' button."""
+    # Answer callback immediately to prevent timeout
+    await callback.answer()
+    
     await state.clear()
     
     # Get user's current model
@@ -109,12 +118,14 @@ async def menu_model(callback: CallbackQuery, state: FSMContext) -> None:
         text=MODEL_SELECTION.format(model_name=model_name),
         reply_markup=model_keyboard(current_model),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CallbackData.TOKENS)
 async def menu_tokens(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle 'Купить токены' button - show shop."""
+    # Answer callback immediately to prevent timeout
+    await callback.answer()
+    
     await state.clear()
     
     # Get current balance
@@ -130,19 +141,20 @@ async def menu_tokens(callback: CallbackQuery, state: FSMContext) -> None:
         text=SHOP_MESSAGE.format(balance=balance),
         reply_markup=tokens_keyboard(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CallbackData.TRENDS)
 async def menu_trends(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle 'Идеи и тренды' button."""
+    # Answer callback immediately to prevent timeout
+    await callback.answer()
+    
     await state.clear()
     
     await callback.message.edit_text(
         text=TRENDS_MENU,
         reply_markup=templates_keyboard(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data == CallbackData.GUIDE)
