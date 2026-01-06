@@ -42,6 +42,7 @@ __pycache__/
 # OS X
 .DS_Store
 .pytest_cache
+logs.txt
 
 # Docker
 .dockerignore
