@@ -1,7 +1,7 @@
 """Add transactions table for tracking token movements.
 
 Revision ID: add_transactions_table
-Revises: add_gifts_table
+Revises: g1h2i3j4k5l6
 Create Date: 2026-01-07
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'add_transactions_table'
-down_revision: Union[str, None] = 'add_gifts_table'
+down_revision: Union[str, None] = 'g1h2i3j4k5l6'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
