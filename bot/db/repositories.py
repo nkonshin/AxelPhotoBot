@@ -632,3 +632,65 @@ class GiftRepository:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+
+class TransactionRepository:
+    """Repository for Transaction CRUD operations."""
+    
+    def __init__(self, session: AsyncSession):
+        self.session = session
+    
+    async def create(
+        self,
+        user_id: int,
+        type: str,
+        tokens_amount: int,
+        description: str,
+        payment_id: Optional[int] = None,
+        gift_id: Optional[int] = None,
+        task_id: Optional[int] = None,
+        related_user_id: Optional[int] = None,
+    ) -> "Transaction":
+        """Create a new transaction record."""
+        from bot.db.models import Transaction
+        
+        transaction = Transaction(
+            user_id=user_id,
+            type=type,
+            tokens_amount=tokens_amount,
+            description=description,
+            payment_id=payment_id,
+            gift_id=gift_id,
+            task_id=task_id,
+            related_user_id=related_user_id,
+        )
+        self.session.add(transaction)
+        await self.session.commit()
+        await self.session.refresh(transaction)
+        
+        return transaction
+    
+    async def get_user_transactions(
+        self,
+        user_id: int,
+        limit: int = 5,
+        only_credits: bool = False,
+    ) -> List["Transaction"]:
+        """Get user's transaction history.
+        
+        Args:
+            user_id: User's database ID
+            limit: Maximum number of transactions
+            only_credits: If True, only return positive transactions (purchases, bonuses)
+        """
+        from bot.db.models import Transaction
+        
+        query = select(Transaction).where(Transaction.user_id == user_id)
+        
+        if only_credits:
+            query = query.where(Transaction.tokens_amount > 0)
+        
+        result = await self.session.execute(
+            query.order_by(desc(Transaction.created_at)).limit(limit)
+        )
+        return list(result.scalars().all())

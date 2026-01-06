@@ -19,6 +19,7 @@ from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository
 from bot.utils.messages import (
     MENU_MESSAGE,
+    LOW_BALANCE_WARNING,
     SHOP_MESSAGE,
     GENERATE_PROMPT_REQUEST,
     EDIT_IMAGE_REQUEST,
@@ -53,11 +54,15 @@ async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
     user_name = user_tg.first_name or user_tg.username or "друг"
     max_generations = balance // 2  # Low quality = 2 tokens
     
+    # Show low balance warning if 3 or fewer tokens
+    low_balance_warning = LOW_BALANCE_WARNING if balance <= 3 else ""
+    
     await callback.message.edit_text(
         text=MENU_MESSAGE.format(
             user_name=user_name,
             balance=balance,
             max_generations=max_generations,
+            low_balance_warning=low_balance_warning,
         ),
         reply_markup=main_menu_keyboard(),
     )

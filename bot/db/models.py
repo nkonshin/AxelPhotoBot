@@ -188,3 +188,39 @@ class Gift(Base):
     # Relationships
     sender: Mapped["User"] = relationship("User", foreign_keys=[sender_id], lazy="selectin")
     recipient: Mapped[Optional["User"]] = relationship("User", foreign_keys=[recipient_id], lazy="selectin")
+
+
+class Transaction(Base):
+    """Transaction model for tracking all token movements."""
+    
+    __tablename__ = "transactions"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    type: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # purchase, referral_bonus, gift_received, gift_sent, generation, refund
+    tokens_amount: Mapped[int] = mapped_column(Integer, nullable=False)  # positive = credit, negative = debit
+    description: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Optional references
+    payment_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("payments.id"), nullable=True
+    )
+    gift_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("gifts.id"), nullable=True
+    )
+    task_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("generation_tasks.id"), nullable=True
+    )
+    related_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )  # For referral/gift - who gave/received
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    
+    # Relationships
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="selectin")
+    related_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[related_user_id], lazy="selectin")

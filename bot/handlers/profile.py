@@ -7,7 +7,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.db.database import get_session_maker
-from bot.db.repositories import UserRepository, TaskRepository
+from bot.db.repositories import UserRepository, TaskRepository, TransactionRepository
 from bot.keyboards.inline import (
     CallbackData,
     main_menu_keyboard,
@@ -17,6 +17,9 @@ from bot.utils.messages import (
     PROFILE_HEADER,
     PROFILE_HISTORY_ITEM,
     PROFILE_NO_HISTORY,
+    PROFILE_TRANSACTIONS_HEADER,
+    PROFILE_TRANSACTION_ITEM,
+    PROFILE_NO_TRANSACTIONS,
     PROFILE_IMAGE_CAPTION,
     ERROR_USER_NOT_FOUND,
     ERROR_TASK_NOT_FOUND,
@@ -43,6 +46,7 @@ async def show_profile(callback: CallbackQuery) -> None:
     async with session_maker() as session:
         user_repo = UserRepository(session)
         task_repo = TaskRepository(session)
+        transaction_repo = TransactionRepository(session)
         
         user = await user_repo.get_by_telegram_id(user_tg.id)
         
@@ -61,6 +65,9 @@ async def show_profile(callback: CallbackQuery) -> None:
         all_history = await task_repo.get_user_history(user.id, limit=100)
         total_generations = len(all_history)
         successful_generations = sum(1 for t in all_history if t.status == "done")
+        
+        # Get transaction history (only credits - purchases, bonuses, gifts)
+        transactions = await transaction_repo.get_user_transactions(user.id, limit=3, only_credits=True)
     
     # Format quality label
     quality_label = IMAGE_QUALITY_LABELS.get(user.image_quality, user.image_quality)
@@ -99,6 +106,21 @@ async def show_profile(callback: CallbackQuery) -> None:
             )
     else:
         text += PROFILE_NO_HISTORY
+    
+    # Add transaction history
+    text += PROFILE_TRANSACTIONS_HEADER
+    
+    if transactions:
+        for tx in transactions:
+            date = tx.created_at.strftime("%d.%m.%Y") if tx.created_at else "—"
+            tokens_str = f"+{tx.tokens_amount} 🪙" if tx.tokens_amount > 0 else f"{tx.tokens_amount} 🪙"
+            text += PROFILE_TRANSACTION_ITEM.format(
+                date=date,
+                description=tx.description,
+                tokens=tokens_str,
+            )
+    else:
+        text += PROFILE_NO_TRANSACTIONS
 
     # Only back button, no history image buttons
     builder = InlineKeyboardBuilder()

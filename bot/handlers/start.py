@@ -14,6 +14,7 @@ from bot.db.repositories import UserRepository
 from bot.keyboards.inline import main_menu_keyboard, subscription_keyboard
 from bot.utils.messages import (
     WELCOME_MESSAGE,
+    LOW_BALANCE_WARNING,
     SUBSCRIPTION_MESSAGE,
     SUBSCRIPTION_SUCCESS,
     CALLBACK_SUBSCRIPTION_NOT_CONFIRMED,
@@ -149,8 +150,9 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         # Process pending gifts for new users
         gift_message = ""
         if is_new_user and user_tg.username:
-            from bot.db.repositories import GiftRepository
+            from bot.db.repositories import GiftRepository, TransactionRepository
             gift_repo = GiftRepository(session)
+            tx_repo = TransactionRepository(session)
             pending_gifts = await gift_repo.get_pending_gifts_for_username(user_tg.username)
             
             total_gift_tokens = 0
@@ -159,11 +161,22 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
                 total_gift_tokens += gift.tokens_amount
                 # Get sender info
                 sender = await user_repo.get_by_id(gift.sender_id)
+                sender_name = f"@{sender.username}" if sender and sender.username else "Аноним"
                 if sender:
-                    gift_senders.append(f"@{sender.username}" if sender.username else "Аноним")
+                    gift_senders.append(sender_name)
                 # Mark gift as claimed
                 gift.recipient_id = user.id
                 gift.status = "claimed"
+                
+                # Create transaction for this gift
+                await tx_repo.create(
+                    user_id=user.id,
+                    type="gift_received",
+                    tokens_amount=gift.tokens_amount,
+                    description=f"Подарок от {sender_name}",
+                    gift_id=gift.id,
+                    related_user_id=sender.id if sender else None,
+                )
             
             if total_gift_tokens > 0:
                 await user_repo.update_tokens(user.id, total_gift_tokens)
@@ -178,11 +191,17 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         balance = user.tokens
         max_generations = balance // 2  # Low quality = 2 tokens
         
+        # Show low balance warning if 3 or fewer tokens (and no gift message)
+        low_balance_warning = ""
+        if balance <= 3 and not gift_message:
+            low_balance_warning = "\n" + LOW_BALANCE_WARNING
+        
         text = WELCOME_MESSAGE.format(
             user_name=user_name,
             balance=balance,
             max_generations=max_generations,
             gift_message=gift_message,
+            low_balance_warning=low_balance_warning,
         )
         
         if created:

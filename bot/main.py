@@ -422,6 +422,19 @@ async def yookassa_webhook(request: Request):
                             gift.status = "claimed"
                             gift.recipient_id = recipient.id
                             
+                            # Create transaction for recipient
+                            from bot.db.repositories import TransactionRepository
+                            tx_repo = TransactionRepository(session)
+                            sender_name = f"@{sender.username}" if sender and sender.username else "друга"
+                            await tx_repo.create(
+                                user_id=recipient.id,
+                                type="gift_received",
+                                tokens_amount=gift.tokens_amount,
+                                description=f"Подарок от {sender_name}",
+                                gift_id=gift.id,
+                                related_user_id=sender.id if sender else None,
+                            )
+                            
                             logger.info(
                                 f"Gift payment {payment_id} succeeded: "
                                 f"{gift.tokens_amount} tokens to @{gift.recipient_username}"
@@ -499,6 +512,18 @@ async def yookassa_webhook(request: Request):
                             f"to user {user.telegram_id}"
                         )
                         
+                        # Create transaction record
+                        from bot.db.repositories import TransactionRepository
+                        tx_repo = TransactionRepository(session)
+                        package_name = SHOP_PACKAGES.get(payment.package, {}).get("name", payment.package)
+                        await tx_repo.create(
+                            user_id=user.id,
+                            type="purchase",
+                            tokens_amount=payment.tokens_amount,
+                            description=f"{package_name} пакет",
+                            payment_id=payment.id,
+                        )
+                        
                         # Referral bonus: give 20% to referrer
                         if user.referrer_id:
                             referrer = await user_repo.get_by_id(user.referrer_id)
@@ -511,10 +536,19 @@ async def yookassa_webhook(request: Request):
                                         f"to referrer {referrer.telegram_id} (from user {user.telegram_id})"
                                     )
                                     
+                                    # Create transaction for referrer
+                                    referral_name = f"@{user.username}" if user.username else "реферала"
+                                    await tx_repo.create(
+                                        user_id=referrer.id,
+                                        type="referral_bonus",
+                                        tokens_amount=referral_bonus,
+                                        description=f"Бонус от {referral_name}",
+                                        related_user_id=user.id,
+                                    )
+                                    
                                     # Notify referrer about bonus
                                     try:
                                         bot = get_bot()
-                                        referral_name = f"@{user.username}" if user.username else "реферал"
                                         new_balance = referrer.tokens + referral_bonus
                                         
                                         await bot.send_message(
