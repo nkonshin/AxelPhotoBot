@@ -18,6 +18,16 @@ fi
 echo "📥 Получаем изменения из git..."
 git pull
 
+# Очищаем Python кэш (важно для обновления кода!)
+echo "🧹 Очищаем Python кэш..."
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find . -type f -name "*.pyc" -delete 2>/dev/null || true
+
+# Очищаем кэш внутри контейнеров
+echo "🧹 Очищаем кэш в контейнерах..."
+docker-compose exec -T app find /app -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+docker-compose exec -T app find /app -type f -name "*.pyc" -delete 2>/dev/null || true
+
 # Применяем миграции (если есть)
 echo "🔄 Применяем миграции БД..."
 docker-compose exec -T app alembic upgrade head || echo "⚠️  Не удалось применить миграции (возможно контейнер не запущен)"
