@@ -102,6 +102,8 @@ services:
       dockerfile: Dockerfile
       target: production
     container_name: telegram_bot_worker
+    deploy:
+      replicas: 4  # 4 воркера для параллельной обработки задач
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botuser}:${POSTGRES_PASSWORD:-botpassword}@postgres:5432/${POSTGRES_DB:-telegram_bot}
