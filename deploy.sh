@@ -27,10 +27,12 @@ find . -type f -name "*.pyc" -delete 2>/dev/null || true
 echo "🔄 Применяем миграции БД..."
 docker-compose exec -T app alembic upgrade head || echo "⚠️  Не удалось применить миграции (возможно контейнер не запущен)"
 
-# Перезапускаем только app и worker (БД и Redis не трогаем)
-# Используем --force-recreate чтобы пересоздать контейнеры и очистить Python кэш
-echo "♻️  Пересоздаём контейнеры..."
-docker-compose up -d --no-deps --force-recreate app worker
+# Перезапускаем контейнеры
+# Используем down + up вместо --force-recreate (баг в docker-compose 1.29.2)
+echo "♻️  Перезапускаем контейнеры..."
+docker-compose stop app worker
+docker-compose rm -f app worker
+docker-compose up -d app worker
 
 echo "✅ Деплой завершён!"
 echo ""
