@@ -24,9 +24,12 @@ docker-compose exec -T app alembic upgrade head || echo "⚠️  Не удало
 
 # Перезапускаем только app и worker (БД и Redis не трогаем)
 echo "♻️  Перезапускаем сервисы..."
-docker-compose restart app worker
+docker-compose up -d --no-deps --scale worker=4 app worker
 
 echo "✅ Деплой завершён!"
+echo ""
+echo "📊 Статус воркеров:"
+docker ps --filter "name=worker" --format "table {{.Names}}\t{{.Status}}"
 echo ""
 echo "📊 Проверьте логи:"
 echo "   docker-compose logs -f app"
