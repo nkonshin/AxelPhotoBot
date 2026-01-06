@@ -223,6 +223,8 @@ async def process_photo(message: Message, state: FSMContext) -> None:
     Supports multiple photos (up to 10). Each additional photo adds +10% to cost.
     Handles batch uploads (multiple photos in one message via media_group_id).
     """
+    import asyncio
+    
     # Get the largest photo size
     photo: PhotoSize = message.photo[-1]
     file_id = photo.file_id
@@ -230,19 +232,15 @@ async def process_photo(message: Message, state: FSMContext) -> None:
     # Get current state data
     data = await state.get_data()
     source_file_ids = data.get("source_file_ids", [])
-    last_media_group_id = data.get("last_media_group_id")
+    processed_media_groups = data.get("processed_media_groups", set())
+    
+    # Convert to set if it's a list (from JSON)
+    if isinstance(processed_media_groups, list):
+        processed_media_groups = set(processed_media_groups)
     
     # Check if we've reached the limit
     if len(source_file_ids) >= MAX_EDIT_IMAGES:
-        current_media_group_id = message.media_group_id
-        if current_media_group_id and current_media_group_id == last_media_group_id:
-            return
-        await message.answer(
-            f"❌ Максимум {MAX_EDIT_IMAGES} изображений.\n\n"
-            "Отправьте описание изменений или нажмите «Готово».",
-            reply_markup=back_keyboard(),
-        )
-        return
+        return  # Silently ignore, limit message will be shown when user sends prompt
     
     # Get user info (only on first photo)
     if not source_file_ids:
@@ -265,15 +263,10 @@ async def process_photo(message: Message, state: FSMContext) -> None:
     
     # Add photo to list
     source_file_ids.append(file_id)
-    
-    # Check if this is part of a media group (batch upload)
     current_media_group_id = message.media_group_id
     
-    # Update state
-    await state.update_data(
-        source_file_ids=source_file_ids,
-        last_media_group_id=current_media_group_id,
-    )
+    # Update state immediately
+    await state.update_data(source_file_ids=source_file_ids)
     
     # For backward compatibility, also store first image as source_file_id
     if len(source_file_ids) == 1:
@@ -281,20 +274,29 @@ async def process_photo(message: Message, state: FSMContext) -> None:
     
     await state.set_state(EditStates.waiting_edit_prompt)
     
-    # If this is part of a media group, wait for all photos
+    # Handle media group (batch upload)
     if current_media_group_id:
         # Check if we already processed this media group
-        if current_media_group_id == last_media_group_id:
-            # Just add photo, don't send message yet
-            return
+        if current_media_group_id in processed_media_groups:
+            return  # Already sent message for this group
         
-        # First photo in media group - wait for others
-        import asyncio
-        await asyncio.sleep(1.0)  # Wait for all photos to arrive
+        # Mark as being processed and wait for all photos
+        await asyncio.sleep(1.5)  # Wait for all photos in media group
         
-        # Re-read state to get final count
+        # Re-read state to get all photos
         data = await state.get_data()
         source_file_ids = data.get("source_file_ids", [])
+        processed_media_groups = data.get("processed_media_groups", set())
+        if isinstance(processed_media_groups, list):
+            processed_media_groups = set(processed_media_groups)
+        
+        # Check again if already processed (another handler might have done it)
+        if current_media_group_id in processed_media_groups:
+            return
+        
+        # Mark this media group as processed
+        processed_media_groups.add(current_media_group_id)
+        await state.update_data(processed_media_groups=list(processed_media_groups))
     
     photos_count = len(source_file_ids)
     
@@ -481,47 +483,51 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
 @router.message(EditStates.waiting_edit_prompt, F.photo)
 async def process_additional_photo(message: Message, state: FSMContext) -> None:
     """Handle additional photo uploads while waiting for prompt."""
+    import asyncio
+    
     photo: PhotoSize = message.photo[-1]
     file_id = photo.file_id
     
     data = await state.get_data()
     source_file_ids = data.get("source_file_ids", [])
-    last_media_group_id = data.get("last_media_group_id")
+    processed_media_groups = data.get("processed_media_groups", set())
+    
+    # Convert to set if it's a list (from JSON)
+    if isinstance(processed_media_groups, list):
+        processed_media_groups = set(processed_media_groups)
     
     if len(source_file_ids) >= MAX_EDIT_IMAGES:
-        # Only show error once per media group
-        current_media_group_id = message.media_group_id
-        if current_media_group_id and current_media_group_id == last_media_group_id:
-            return
-        await message.answer(
-            f"❌ Максимум {MAX_EDIT_IMAGES} изображений.\n\n"
-            "Отправьте описание изменений.",
-            reply_markup=back_keyboard(),
-        )
-        return
+        return  # Silently ignore extra photos
     
     source_file_ids.append(file_id)
     current_media_group_id = message.media_group_id
     
-    await state.update_data(
-        source_file_ids=source_file_ids,
-        last_media_group_id=current_media_group_id,
-    )
+    # Update state immediately
+    await state.update_data(source_file_ids=source_file_ids)
     
-    # If this is part of a media group, wait for all photos
+    # Handle media group (batch upload)
     if current_media_group_id:
         # Check if we already processed this media group
-        if current_media_group_id == last_media_group_id:
-            # Just add photo, don't send message yet
-            return
+        if current_media_group_id in processed_media_groups:
+            return  # Already sent message for this group
         
-        # First photo in media group - wait for others
-        import asyncio
-        await asyncio.sleep(1.0)  # Wait for all photos to arrive
+        # Wait for all photos in media group
+        await asyncio.sleep(1.5)
         
-        # Re-read state to get final count
+        # Re-read state to get all photos
         data = await state.get_data()
         source_file_ids = data.get("source_file_ids", [])
+        processed_media_groups = data.get("processed_media_groups", set())
+        if isinstance(processed_media_groups, list):
+            processed_media_groups = set(processed_media_groups)
+        
+        # Check again if already processed
+        if current_media_group_id in processed_media_groups:
+            return
+        
+        # Mark this media group as processed
+        processed_media_groups.add(current_media_group_id)
+        await state.update_data(processed_media_groups=list(processed_media_groups))
     
     photos_count = len(source_file_ids)
     extra_cost = calculate_extra_images_cost(photos_count)
