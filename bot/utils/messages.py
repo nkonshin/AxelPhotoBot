@@ -646,8 +646,8 @@ def format_date(dt) -> str:
 
 # Level thresholds (generations needed to reach each level)
 LEVELS = [
-    {"name": "🌱 Новичок", "threshold": 0, "next_threshold": 5},
-    {"name": "🎨 Любитель", "threshold": 5, "next_threshold": 15},
+    {"name": "Новичок", "threshold": 0, "next_threshold": 5},
+    {"name": "Любитель", "threshold": 5, "next_threshold": 15},
     {"name": "✨ Творец", "threshold": 15, "next_threshold": 30},
     {"name": "🔥 Мастер", "threshold": 30, "next_threshold": 50},
     {"name": "💎 Эксперт", "threshold": 50, "next_threshold": 100},
@@ -753,8 +753,8 @@ def format_achievements_info(total_generations: int) -> str:
     
     for achievement in achievements:
         if achievement["unlocked"]:
-            lines.append(f"✅ {achievement['emoji']} <b>{achievement['name']}</b>")
+            lines.append(f"✅ <b>{achievement['name']}</b>")
         else:
-            lines.append(f"🔒 {achievement['emoji']} {achievement['name']} ({achievement['threshold']} генераций)")
+            lines.append(f"🔒 {achievement['name']} ({achievement['threshold']} генераций)")
     
     return "\n".join(lines)

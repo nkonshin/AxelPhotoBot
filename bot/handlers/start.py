@@ -97,25 +97,20 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         is_new_user = existing_user is None
         
         # Send welcome video for ALL users on every /start
-        # Send in background to avoid blocking if Telegram API is slow
+        # Send BEFORE text message to ensure correct order
         if config.welcome_video_file_id:
             import asyncio
-            
-            async def send_video_with_timeout():
-                try:
-                    # Try to send as video with 10 second timeout
-                    await asyncio.wait_for(
-                        message.answer_video(video=config.welcome_video_file_id),
-                        timeout=10.0
-                    )
-                    logger.info(f"Welcome video sent to user {user_tg.id}")
-                except asyncio.TimeoutError:
-                    logger.warning(f"Welcome video timeout for user {user_tg.id} - Telegram API slow")
-                except Exception as e:
-                    logger.error(f"Failed to send welcome video to {user_tg.id}: {e}")
-            
-            # Send video in background, don't wait for it
-            asyncio.create_task(send_video_with_timeout())
+            try:
+                # Try to send as video with 5 second timeout
+                await asyncio.wait_for(
+                    message.answer_video(video=config.welcome_video_file_id),
+                    timeout=5.0
+                )
+                logger.info(f"Welcome video sent to user {user_tg.id}")
+            except asyncio.TimeoutError:
+                logger.warning(f"Welcome video timeout for user {user_tg.id} - Telegram API slow, continuing...")
+            except Exception as e:
+                logger.error(f"Failed to send welcome video to {user_tg.id}: {e}")
         
         if is_new_user:
             # Check subscription requirement
