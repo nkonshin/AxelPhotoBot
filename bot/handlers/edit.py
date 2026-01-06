@@ -484,6 +484,7 @@ async def process_additional_photo(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     source_file_ids = data.get("source_file_ids", [])
     last_media_group_id = data.get("last_media_group_id")
+    pending_media_group_count = data.get("pending_media_group_count", 0)
     
     if len(source_file_ids) >= MAX_EDIT_IMAGES:
         await message.answer(
@@ -498,23 +499,40 @@ async def process_additional_photo(message: Message, state: FSMContext) -> None:
     # Check if this is part of a media group (batch upload)
     current_media_group_id = message.media_group_id
     
-    await state.update_data(
-        source_file_ids=source_file_ids,
-        last_media_group_id=current_media_group_id,
-    )
-    
-    # Only send message if this is not part of a media group,
-    # or if it's the first photo in a media group
-    if current_media_group_id and current_media_group_id == last_media_group_id:
-        return
-    
-    # Wait a bit for other photos in media group to arrive
     if current_media_group_id:
+        # Track how many photos in this media group
+        if current_media_group_id == last_media_group_id:
+            pending_media_group_count += 1
+        else:
+            pending_media_group_count = 1
+        
+        await state.update_data(
+            source_file_ids=source_file_ids,
+            last_media_group_id=current_media_group_id,
+            pending_media_group_count=pending_media_group_count,
+        )
+        
+        # Wait for more photos in media group
         import asyncio
-        await asyncio.sleep(0.5)
-        # Re-read state to get all photos from media group
+        await asyncio.sleep(0.7)
+        
+        # Re-read state to get final count
         data = await state.get_data()
+        current_pending = data.get("pending_media_group_count", 0)
+        
+        # Only the last photo in the group should send the message
+        if current_pending != pending_media_group_count:
+            return
+        
+        # Reset pending count
+        await state.update_data(pending_media_group_count=0)
         source_file_ids = data.get("source_file_ids", [])
+    else:
+        await state.update_data(
+            source_file_ids=source_file_ids,
+            last_media_group_id=None,
+            pending_media_group_count=0,
+        )
     
     photos_count = len(source_file_ids)
     extra_cost = calculate_extra_images_cost(photos_count)

@@ -464,17 +464,22 @@ def result_feedback_keyboard(task_id: int) -> InlineKeyboardMarkup:
         task_id: The task ID for feedback
     
     Layout:
-    [🔄 Ещё раз] [✏️ Изменить промпт]
+    [🔄 Ещё раз                    ]
+    [✏️ Изменить промпт            ]
     [👍] [👎]
     """
     builder = InlineKeyboardBuilder()
     
-    # Quick actions row
+    # Regenerate button (full width)
     builder.row(
         InlineKeyboardButton(
             text="🔄 Ещё раз",
             callback_data=f"{CallbackData.REGENERATE_PREFIX}{task_id}",
         ),
+    )
+    
+    # Edit prompt button (full width)
+    builder.row(
         InlineKeyboardButton(
             text="✏️ Изменить промпт",
             callback_data=f"edit_prompt:{task_id}",

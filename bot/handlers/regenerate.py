@@ -218,7 +218,7 @@ async def handle_edit_prompt(callback: CallbackQuery, state: FSMContext) -> None
             model=model,
             expensive_confirmed=False,
         )
-        await state.set_state(EditStates.waiting_prompt)
+        await state.set_state(EditStates.waiting_edit_prompt)
         
         from bot.keyboards.inline import back_keyboard
         
