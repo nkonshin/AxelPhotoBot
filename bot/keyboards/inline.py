@@ -458,17 +458,30 @@ def subscription_keyboard(channel: str) -> InlineKeyboardMarkup:
 
 def result_feedback_keyboard(task_id: int) -> InlineKeyboardMarkup:
     """
-    Create keyboard with feedback buttons for generation result.
+    Create keyboard with feedback buttons and quick actions for generation result.
     
     Args:
         task_id: The task ID for feedback
     
     Layout:
+    [🔄 Ещё раз] [✏️ Изменить промпт]
     [👍] [👎]
-    [🔄 Сгенерировать ещё]
     """
     builder = InlineKeyboardBuilder()
     
+    # Quick actions row
+    builder.row(
+        InlineKeyboardButton(
+            text="🔄 Ещё раз",
+            callback_data=f"{CallbackData.REGENERATE_PREFIX}{task_id}",
+        ),
+        InlineKeyboardButton(
+            text="✏️ Изменить промпт",
+            callback_data=f"edit_prompt:{task_id}",
+        ),
+    )
+    
+    # Feedback row
     builder.row(
         InlineKeyboardButton(
             text="👍",
@@ -478,12 +491,6 @@ def result_feedback_keyboard(task_id: int) -> InlineKeyboardMarkup:
             text="👎",
             callback_data=f"{CallbackData.FEEDBACK_NEGATIVE_PREFIX}{task_id}",
         ),
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text="🔄 Сгенерировать ещё",
-            callback_data=f"{CallbackData.REGENERATE_PREFIX}{task_id}",
-        )
     )
     
     return builder.as_markup()

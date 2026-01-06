@@ -135,3 +135,102 @@ async def handle_regenerate(callback: CallbackQuery, state: FSMContext) -> None:
         reply_markup=image_settings_confirm_keyboard(quality, size),
     )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("edit_prompt:"))
+async def handle_edit_prompt(callback: CallbackQuery, state: FSMContext) -> None:
+    """
+    Handle edit prompt button click.
+    
+    Allows user to modify the prompt and regenerate with new description.
+    """
+    # Extract task_id from callback data
+    task_id_str = callback.data.replace("edit_prompt:", "")
+    
+    try:
+        task_id = int(task_id_str)
+    except ValueError:
+        await callback.answer("❌ Неверный ID задачи")
+        return
+    
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        task_repo = TaskRepository(session)
+        user_repo = UserRepository(session)
+        
+        # Get original task
+        task = await task_repo.get_by_id(task_id)
+        
+        if task is None:
+            await callback.answer("❌ Задача не найдена")
+            return
+        
+        # Get user
+        user = await user_repo.get_by_telegram_id(callback.from_user.id)
+        
+        if user is None:
+            await callback.answer("❌ Пользователь не найден")
+            return
+        
+        # Check if this task belongs to the user
+        if task.user_id != user.id:
+            await callback.answer("❌ Это не ваша задача")
+            return
+        
+        quality = task.image_quality
+        size = task.image_size
+        model = task.model
+        prompt = task.prompt
+    
+    # Determine if it's a generate or edit task
+    if task.task_type == "generate":
+        # Save settings to state and ask for new prompt
+        await state.update_data(
+            user_id=user.id,
+            image_quality=quality,
+            image_size=size,
+            model=model,
+            expensive_confirmed=False,
+        )
+        await state.set_state(GenerationStates.waiting_prompt)
+        
+        from bot.keyboards.inline import back_keyboard
+        
+        text = (
+            f"✏️ <b>Изменить промпт</b>\n\n"
+            f"<b>Предыдущий промпт:</b>\n<i>{prompt[:300]}...</i>\n\n"
+            f"Отправьте новое описание для генерации:"
+        )
+    else:
+        # Edit task - need source image
+        source_file_id = task.source_image_url
+        
+        if not source_file_id:
+            await callback.answer("❌ Исходное изображение не найдено")
+            return
+        
+        await state.update_data(
+            user_id=user.id,
+            source_file_id=source_file_id,
+            image_quality=quality,
+            image_size=size,
+            model=model,
+            expensive_confirmed=False,
+        )
+        await state.set_state(EditStates.waiting_prompt)
+        
+        from bot.keyboards.inline import back_keyboard
+        
+        text = (
+            f"✏️ <b>Изменить описание</b>\n\n"
+            f"<b>Предыдущее описание:</b>\n<i>{prompt[:300]}...</i>\n\n"
+            f"Отправьте новое описание изменений:"
+        )
+    
+    await callback.message.answer(
+        text=text,
+        reply_markup=back_keyboard(),
+    )
+    await callback.answer()
+
