@@ -97,15 +97,25 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
         is_new_user = existing_user is None
         
         # Send welcome video for ALL users on every /start
+        # Send in background to avoid blocking if Telegram API is slow
         if config.welcome_video_file_id:
-            try:
-                # Try to send as video (file_id is from regular video)
-                await message.answer_video(
-                    video=config.welcome_video_file_id,
-                )
-                logger.info(f"Welcome video sent to user {user_tg.id}")
-            except Exception as e:
-                logger.error(f"Failed to send welcome video to {user_tg.id}: {e}")
+            import asyncio
+            
+            async def send_video_with_timeout():
+                try:
+                    # Try to send as video with 10 second timeout
+                    await asyncio.wait_for(
+                        message.answer_video(video=config.welcome_video_file_id),
+                        timeout=10.0
+                    )
+                    logger.info(f"Welcome video sent to user {user_tg.id}")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Welcome video timeout for user {user_tg.id} - Telegram API slow")
+                except Exception as e:
+                    logger.error(f"Failed to send welcome video to {user_tg.id}: {e}")
+            
+            # Send video in background, don't wait for it
+            asyncio.create_task(send_video_with_timeout())
         
         if is_new_user:
             # Check subscription requirement
@@ -199,6 +209,9 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject,
 @router.callback_query(F.data == "check_subscription")
 async def check_subscription_callback(callback: CallbackQuery, bot: Bot) -> None:
     """Handle subscription check button click."""
+    # Answer callback immediately to prevent timeout
+    await callback.answer()
+    
     user_tg = callback.from_user
     
     is_subscribed = await check_subscription(
@@ -206,9 +219,8 @@ async def check_subscription_callback(callback: CallbackQuery, bot: Bot) -> None
     )
     
     if not is_subscribed:
-        await callback.answer(
+        await callback.message.answer(
             text=CALLBACK_SUBSCRIPTION_NOT_CONFIRMED,
-            show_alert=True,
         )
         return
     
@@ -224,8 +236,6 @@ async def check_subscription_callback(callback: CallbackQuery, bot: Bot) -> None
         
         if created:
             logger.info(f"New user registered after subscription: {user_tg.id}")
-    
-    await callback.answer(CALLBACK_SUBSCRIPTION_CONFIRMED)
     
     await callback.message.edit_text(
         text=SUBSCRIPTION_SUCCESS.format(tokens=user.tokens),
