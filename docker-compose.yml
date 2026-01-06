@@ -101,7 +101,6 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
-    container_name: telegram_bot_worker
     deploy:
       replicas: 4  # 4 воркера для параллельной обработки задач
     environment:
