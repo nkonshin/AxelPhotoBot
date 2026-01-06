@@ -499,6 +499,38 @@ async def yookassa_webhook(request: Request):
                             f"to user {user.telegram_id}"
                         )
                         
+                        # Referral bonus: give 20% to referrer
+                        if user.referrer_id:
+                            referrer = await user_repo.get_by_id(user.referrer_id)
+                            if referrer:
+                                referral_bonus = int(payment.tokens_amount * 0.2)  # 20% bonus
+                                if referral_bonus > 0:
+                                    await user_repo.update_tokens(referrer.id, referral_bonus)
+                                    logger.info(
+                                        f"Referral bonus: added {referral_bonus} tokens "
+                                        f"to referrer {referrer.telegram_id} (from user {user.telegram_id})"
+                                    )
+                                    
+                                    # Notify referrer about bonus
+                                    try:
+                                        bot = get_bot()
+                                        referral_name = f"@{user.username}" if user.username else "реферал"
+                                        new_balance = referrer.tokens + referral_bonus
+                                        
+                                        await bot.send_message(
+                                            chat_id=referrer.telegram_id,
+                                            text=(
+                                                f"🎉 <b>Реферальный бонус!</b>\n\n"
+                                                f"Ваш реферал {referral_name} пополнил баланс!\n\n"
+                                                f"<b>Вы получили:</b> +{referral_bonus} 🪙 (20% от покупки)\n"
+                                                f"<b>Ваш баланс:</b> {new_balance} 🪙\n\n"
+                                                "Продолжайте приглашать друзей! 🚀"
+                                            ),
+                                            parse_mode="HTML",
+                                        )
+                                    except Exception as e:
+                                        logger.error(f"Failed to notify referrer about bonus: {e}")
+                        
                         # Send notification to user
                         try:
                             bot = get_bot()
