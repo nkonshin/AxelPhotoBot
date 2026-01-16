@@ -17,7 +17,12 @@ from bot.db.database import get_session_maker
 from bot.db.models import GenerationTask
 from bot.db.repositories import TaskRepository
 from bot.services.balance import BalanceService
-from bot.services.image_provider import OpenAIImageProvider, GenerationResult
+from bot.services.image_provider import (
+    OpenAIImageProvider,
+    SeeDreamImageProvider,
+    GenerationResult,
+    ImageProvider,
+)
 from bot.services.image_tokens import estimate_api_tokens, IMAGE_QUALITY_LABELS
 from bot.services.admin_notify import notify_generation_failure, notify_moderation_block
 
@@ -128,11 +133,20 @@ async def _process_generation_task_async(task_id: int) -> bool:
             animation_message_id = await _send_animation_message(telegram_id)
         
         try:
-            # Initialize image provider with task model
-            image_provider = OpenAIImageProvider(
-                api_key=config.openai_api_key,
-                model=task.model or "gpt-image-1",
-            )
+            # Initialize image provider based on model
+            image_provider: ImageProvider
+            if task.model and task.model.startswith("seedream"):
+                # Use SeeDream provider
+                image_provider = SeeDreamImageProvider(
+                    api_key=config.ark_api_key,
+                    model="seedream-4-5-251128",
+                )
+            else:
+                # Use OpenAI provider
+                image_provider = OpenAIImageProvider(
+                    api_key=config.openai_api_key,
+                    model=task.model or "gpt-image-1",
+                )
             
             # Update progress: preparing request
             if animation_message_id and telegram_id:
