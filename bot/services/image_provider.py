@@ -246,6 +246,12 @@ class OpenAIImageProvider(ImageProvider):
 class SeeDreamImageProvider(ImageProvider):
     """BytePlus ARK SeeDream 4.5 implementation of ImageProvider."""
 
+    # Model name mapping: short name -> full API model name
+    MODEL_MAPPING = {
+        "seedream-4-5": "seedream-4-5-251128",
+        "seedream-4-5-251128": "seedream-4-5-251128",  # Allow full name too
+    }
+
     def __init__(self, api_key: str, model: str = "seedream-4-5-251128"):
         self.api_key = api_key
         self.model = model
@@ -254,6 +260,11 @@ class SeeDreamImageProvider(ImageProvider):
             api_key=api_key,
             base_url="https://ark.ap-southeast.bytepluses.com/api/v3",
         )
+
+    def _get_full_model_name(self, model: str | None) -> str:
+        """Map short model name to full API model name."""
+        use_model = model or self.model
+        return self.MODEL_MAPPING.get(use_model, use_model)
 
     async def generate(
         self,
@@ -267,7 +278,7 @@ class SeeDreamImageProvider(ImageProvider):
         SeeDream returns URLs, not base64.
         Supports sizes: 1024x1024, 1024x1536, 1536x1024, 2048x2048, etc.
         """
-        use_model = model or self.model
+        use_model = self._get_full_model_name(model)
         use_size = size or "1024x1024"
 
         logger.info(f"Generating image with SeeDream {use_model}, size: {use_size}, quality: {quality}, prompt: {prompt[:100]}...")
@@ -325,7 +336,7 @@ class SeeDreamImageProvider(ImageProvider):
         - A single file_id or URL
         - A JSON array of file_ids (for multiple images)
         """
-        use_model = model or self.model
+        use_model = self._get_full_model_name(model)
         use_size = size or "1024x1024"
 
         logger.info(f"Editing image with SeeDream {use_model}, size: {use_size}, quality: {quality}, prompt: {prompt[:100]}...")
