@@ -32,47 +32,36 @@ class EditTemplate:
 
 EDIT_TEMPLATES: List[EditTemplate] = [
     EditTemplate(
-        id="trend_collage_female",
-        name="👩 Трендовый женский коллаж",
-        description="Создание стильного коллажа с вашим фото",
+        id="1",
+        name="Трендовый женский коллаж 👸🏼",
+        description="Создание стильного коллажа с твоими фото",
         prompt=(
-            "Create a trendy aesthetic collage with the person from the photo. "
-            "Include soft pastel colors, dreamy atmosphere, fashion magazine style, "
-            "artistic composition with multiple frames, elegant typography elements, "
-            "high fashion editorial look, professional retouching, soft lighting"
+            "Это изображение представляет собой коллаж из четырех фотографий (сетка 2х2), на которых молодая девушка с загруженной фотографии лицо не изменять позирует в спальне в современном стиле с фиолетовой подсветкой протока Снимки выполнены в едином стиле с мягким, слегка приглушенным освещением. Общая композиция и стиль Все кадры — это селфи крупным планом, на которых акцент сделан на лице, макияже и руках. Девушка одета в черную одежду с длинными рукавами-митенками (с прорезями для пальцев). Детали внешности • Макияж: Выразительные черные стрелки на глазах, аккуратно оформленные брови и длинные ресницы. На губах — помада нейтрального розового оттенка. • Прическа: Волосы гладко зачесаны назад и собраны. • Маникюр: Очень длинные ногти формы «балерина» или «конус». Цвет комбинированный: ярко-розовый и молочно-белый (стиль омбре или френч). • Аксессуары: На руках видны тонкие золотистые кольца, а в ушах — небольшие серьги-кольца и гвоздики. Описание отдельных кадров 1. Верхний левый: Макросъемка верхней части лица и глаза. Рука в черном рукаве поднесена к подбородку, виден яркий розовый ноготь. 2. Верхний правый: Девушка видна со спины или в пол-оборота, глядя в камеру через плечо. Она держит руку у лица, демонстрируя длинные ногти. 3. Нижний левый: Портрет почти в анфас. Девушка задумчиво прикусывает палец или держит руку у губ, глядя прямо в объектив. 4. Нижний правый: Прямой взгляд в камеру. Девушка показывает средний палец, акцентируя внимание на белом ногте и кольце. Фон и атмосфера Общая эстетика снимков соответствует современным трендам соцсетей, сочетая дерзость и подчеркнутую женственность."
         ),
     ),
     EditTemplate(
-        id="trend_collage_male",
-        name="👨 Трендовый мужской коллаж",
-        description="Создание стильного мужского коллажа",
+        id="2",
+        name="Трендовый мужской портрет 👨🏼‍💻",
+        description="Портрет в стиле профессиональной фотосессии",
         prompt=(
-            "Create a trendy masculine collage with the person from the photo. "
-            "Include bold colors, urban atmosphere, GQ magazine style, "
-            "artistic composition with geometric frames, modern typography, "
-            "high fashion editorial look, professional retouching, dramatic lighting"
+            "Используй загруженное фото для лица — точно сохрани ВСЕ черты: разрез глаз, форму носа, губы, овал лица, брови, подбородок. Лицо должно быть полностью идентично. Человек сидит, смотрит прямо вперёд. Оба локтя лежат на бёдрах, руки сложены вместе с переплетёнными пальцами естественным расслабленным образом, передавая уверенность и спокойную силу. Приталенная чёрная рубашка со слегка открытым воротником, без аксессуаров. Средний план. Кожа гипер-детализирована и естественна с видимыми порами, реалистичной текстурой и мягкими тональными переходами на лице, шее и плечах. Матовая отделка с мягкими бликами на скулах, переносице и линии челюсти. Мягкая студийная постановка света с тёплым ореолом сзади и градиентным фоном, создающим кинематографичную глубину и роскошную editorial атмосферу. Shot on 85mm lens, f/2.0, soft studio lighting with warm backlight, gradient background. Цвета: чёрный, тёплый градиентный фон, естественные тона кожи. Ultra-realistic high-fashion editorial портрет, кинематографичный стиль, роскошная атмосфера, высокая детализация. КРИТИЧНО: Лицо и выражение должны на 100% совпадать с загруженным фото."
+        ),
+    ),    
+    EditTemplate(
+        id="3",
+        name="На ГУМ катке ⛸️",
+        description="Твое трендовое фото с главного катка страны",
+        prompt=(
+            "woman in profile, holding white ice skates, outdoor ice rink setting, illuminated historic building in background, nighttime scene, festive string lights, foreground: woman's face, shoulder, arm, and white ice skates, background: blurred illuminated building, string lights, faint Christmas tree, ice rink barrier, depth: shallow depth of field, woman and skates in sharp focus, background blurred, medium close-up, profile view of the woman, slightly off-center, eye-level shot, standard lens, shallow depth of field, dim ambient light from festive string lights and building illumination, creating soft highlights, woman holding ice skates, outdoor ice rink at night, with an illuminated historic building in the background, shiny synthetic fabric (jacket), faux fur, leather/synthetic (skates), metal (skate blades), plastic (rink barrier), woman with dark hair pulled back, wearing black fluffy earmuffs with a logo, black shiny puffer jacket, white faux fur collar and cuffs, black gloves, natural makeup with highlighted cheekbones and full lips, white figure skates with brown heels and white laces, black puffer jacket with white fur collar, black earmuffs, snowflakes falling, decorative ice rink barrier, cinematic color grading, soft bokeh, slight vignette"
         ),
     ),
+
     EditTemplate(
-        id="cinematic_portrait",
-        name="🎬 Кинематографичный портрет",
-        description="Портрет в стиле голливудского кино",
+        id="4",
+        name="На горных лыжах ⛷️",
+        description="Классное фото с горного курорта",
         prompt=(
-            "Transform into a cinematic movie portrait. Hollywood style lighting, "
-            "dramatic shadows, film grain effect, anamorphic lens flare, "
-            "professional color grading, movie poster quality, "
-            "depth of field, atmospheric mood, 35mm film look"
-        ),
-    ),
-    EditTemplate(
-        id="neon_cyberpunk",
-        name="🌃 Неоновый киберпанк",
-        description="Футуристический стиль с неоновыми огнями",
-        prompt=(
-            "Transform into cyberpunk neon style. Vibrant neon lights in pink and blue, "
-            "futuristic city background, rain reflections, holographic elements, "
-            "Blade Runner atmosphere, high contrast, glowing effects, "
-            "sci-fi aesthetic, night city vibes"
+            "woman с загруженной фотографии лицо не изменять wearing pink fluffy jacket, pink ski goggles with reflective blue lenses, snowy mountain background, pink skis, selfie perspective, foreground: woman's face, upper body in pink fluffy jacket, pink ski goggles, blonde hair, background: snowy mountain peaks, clear blue sky, ski slopes, depth: shallow depth of field, background slightly blurred, close-up, selfie perspective, centered subject, vertical orientation, wide angle, handheld, eye-level, bright natural sunlight, clear day, woman in ski gear, snowy mountain landscape, ski resort, fluffy synthetic fabric, plastic (goggles, skis), reflective material (goggle lenses), snow, pink fluffy jacket with hood, pink ski goggles with mirrored blue lenses, blonde hair visible under hood, pink lips, pink skis with black details, dark hair, clear blue sky, bright sunlight, vibrant colors, brightening, saturation boost"
         ),
     ),
 ]
@@ -83,7 +72,7 @@ EDIT_TEMPLATES: List[EditTemplate] = [
 # Измените URL на свой канал
 # =============================================================================
 
-EXAMPLES_CHANNEL_URL = "https://t.me/nanobananabot_examples"
+EXAMPLES_CHANNEL_URL = "https://t.me/nkonshin_ai"
 EXAMPLES_BUTTON_TEXT = "📚 Больше примеров"
 
 
