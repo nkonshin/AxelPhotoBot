@@ -10,7 +10,15 @@ from bot.config import config
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository, TaskRepository
 from bot.services.balance import BalanceService, InsufficientBalanceError
-from bot.services.image_tokens import estimate_image_tokens, calculate_total_cost, is_valid_quality, is_valid_size
+from bot.services.image_tokens import (
+    estimate_image_tokens, 
+    calculate_total_cost, 
+    is_valid_quality, 
+    is_valid_size,
+    is_seedream_model,
+    get_quality_labels_for_model,
+    convert_quality_for_model,
+)
 from bot.keyboards.inline import (
     CallbackData,
     image_settings_confirm_keyboard,
@@ -19,7 +27,6 @@ from bot.keyboards.inline import (
     insufficient_balance_keyboard,
 )
 from bot.states.generation import GenerationStates
-from bot.services.image_tokens import IMAGE_QUALITY_LABELS
 from bot.utils.messages import (
     ERROR_EMPTY_PROMPT,
     ERROR_PROMPT_TOO_LONG,
@@ -56,7 +63,10 @@ def _build_confirmation_text(
 ) -> str:
     warning = EXPENSIVE_WARNING if cost >= config.high_cost_threshold else ""
     confirm_line = CONFIRM_LINE_AGAIN if second_confirm else CONFIRM_LINE
-    quality_label = IMAGE_QUALITY_LABELS.get(quality, quality)
+    
+    # Get quality label based on model
+    quality_labels = get_quality_labels_for_model(model)
+    quality_label = quality_labels.get(quality, quality)
 
     return (
         f"🎨 <b>Подтверждение генерации</b>\n\n"
@@ -115,8 +125,12 @@ async def process_prompt(message: Message, state: FSMContext) -> None:
         quality = user.image_quality
         size = user.image_size
         model = user.selected_model
+        
+        # Convert quality if it doesn't match the model
+        if not is_valid_quality(quality, model):
+            quality = convert_quality_for_model(quality, model)
 
-    cost = estimate_image_tokens(quality, size)
+    cost = estimate_image_tokens(quality, size, model=model)
 
     # Save prompt to state
     await state.update_data(
@@ -139,7 +153,7 @@ async def process_prompt(message: Message, state: FSMContext) -> None:
             size=size,
             model=model,
         ),
-        reply_markup=image_settings_confirm_keyboard(quality, size),
+        reply_markup=image_settings_confirm_keyboard(quality, size, model=model),
     )
 
 
@@ -151,10 +165,7 @@ async def set_generation_quality(callback: CallbackQuery, state: FSMContext) -> 
     """Handle quality selection while confirming generation."""
 
     value = callback.data.replace(CallbackData.IMAGE_QUALITY_PREFIX, "")
-    if not is_valid_quality(value):
-        await callback.answer(CALLBACK_INVALID_QUALITY)
-        return
-
+    
     data = await state.get_data()
     prompt = data.get("prompt")
     user_id = data.get("user_id")
@@ -166,6 +177,11 @@ async def set_generation_quality(callback: CallbackQuery, state: FSMContext) -> 
         await state.clear()
         return
 
+    # Validate quality for the current model
+    if not is_valid_quality(value, model):
+        await callback.answer(CALLBACK_INVALID_QUALITY)
+        return
+
     await state.update_data(image_quality=value, expensive_confirmed=False)
 
     session_maker = get_session_maker()
@@ -175,7 +191,7 @@ async def set_generation_quality(callback: CallbackQuery, state: FSMContext) -> 
         user = await user_repo.get_by_telegram_id(callback.from_user.id)
         balance = user.tokens if user else 0
 
-    cost = estimate_image_tokens(value, size)
+    cost = estimate_image_tokens(value, size, model=model)
     await callback.message.edit_text(
         text=_build_confirmation_text(
             prompt=prompt,
@@ -185,7 +201,7 @@ async def set_generation_quality(callback: CallbackQuery, state: FSMContext) -> 
             size=size,
             model=model,
         ),
-        reply_markup=image_settings_confirm_keyboard(value, size),
+        reply_markup=image_settings_confirm_keyboard(value, size, model=model),
     )
     await callback.answer()
 
@@ -222,7 +238,7 @@ async def set_generation_size(callback: CallbackQuery, state: FSMContext) -> Non
         user = await user_repo.get_by_telegram_id(callback.from_user.id)
         balance = user.tokens if user else 0
 
-    cost = estimate_image_tokens(quality, value)
+    cost = estimate_image_tokens(quality, value, model=model)
     await callback.message.edit_text(
         text=_build_confirmation_text(
             prompt=prompt,
@@ -232,7 +248,7 @@ async def set_generation_size(callback: CallbackQuery, state: FSMContext) -> Non
             size=value,
             model=model,
         ),
-        reply_markup=image_settings_confirm_keyboard(quality, value),
+        reply_markup=image_settings_confirm_keyboard(quality, value, model=model),
     )
     await callback.answer()
 
@@ -251,6 +267,7 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
     user_id = data.get("user_id")
     quality = data.get("image_quality")
     size = data.get("image_size")
+    model = data.get("model")
     expensive_confirmed = data.get("expensive_confirmed", False)
 
     if not prompt or not user_id or not quality or not size:
@@ -262,7 +279,7 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
         await callback.answer()
         return
 
-    cost = estimate_image_tokens(quality, size)
+    cost = estimate_image_tokens(quality, size, model=model)
 
     if cost >= config.high_cost_threshold and not expensive_confirmed:
         session_maker = get_session_maker()
@@ -287,6 +304,7 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
                 quality,
                 size,
                 confirm_callback_data=CallbackData.EXPENSIVE_CONFIRM,
+                model=model,
             ),
         )
         await callback.answer(CALLBACK_CONFIRM_AGAIN)

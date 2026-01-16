@@ -3,10 +3,14 @@
 The bot uses a user-friendly "token" system for billing.
 This module handles the mapping between quality settings and token costs.
 
-Token Economy:
+Token Economy (GPT Image 1.5):
 - Low quality: 2 tokens
 - Medium quality: 5 tokens  
 - High quality: 20 tokens
+
+Token Economy (SeeDream 4.5):
+- 2K quality: 5 tokens
+- 4K quality: 7 tokens
 
 Additional images cost:
 - 1-3 images: free (included in base cost)
@@ -20,7 +24,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-ImageQuality = Literal["low", "medium", "high"]
+ImageQuality = Literal["low", "medium", "high", "2k", "4k"]
 ImageSize = Literal["1024x1024", "1024x1536", "1536x1024"]
 
 
@@ -32,17 +36,29 @@ class ImageParams:
     size: ImageSize
 
 
-# User-facing token costs (simple, user-friendly)
-USER_TOKEN_COSTS: dict[ImageQuality, int] = {
+# User-facing token costs for GPT Image models
+GPT_TOKEN_COSTS: dict[str, int] = {
     "low": 2,
     "medium": 5,
     "high": 20,
 }
 
+# User-facing token costs for SeeDream model
+SEEDREAM_TOKEN_COSTS: dict[str, int] = {
+    "2k": 5,
+    "4k": 7,
+}
+
+# Combined costs (for backward compatibility)
+USER_TOKEN_COSTS: dict[str, int] = {
+    **GPT_TOKEN_COSTS,
+    **SEEDREAM_TOKEN_COSTS,
+}
+
 
 # API token costs for internal tracking (actual OpenAI token usage)
 # These are stored separately for admin analytics
-API_TOKEN_TABLE: dict[ImageQuality, dict[ImageSize, int]] = {
+API_TOKEN_TABLE: dict[str, dict[ImageSize, int]] = {
     "low": {
         "1024x1024": 272,
         "1024x1536": 408,
@@ -58,6 +74,17 @@ API_TOKEN_TABLE: dict[ImageQuality, dict[ImageSize, int]] = {
         "1024x1536": 6240,
         "1536x1024": 6208,
     },
+    # SeeDream uses flat pricing per image
+    "2k": {
+        "1024x1024": 1000,
+        "1024x1536": 1000,
+        "1536x1024": 1000,
+    },
+    "4k": {
+        "1024x1024": 1500,
+        "1024x1536": 1500,
+        "1536x1024": 1500,
+    },
 }
 
 
@@ -68,24 +95,55 @@ IMAGE_SIZE_LABELS: dict[ImageSize, str] = {
 }
 
 
-IMAGE_QUALITY_LABELS: dict[ImageQuality, str] = {
+# Quality labels for GPT Image models
+IMAGE_QUALITY_LABELS: dict[str, str] = {
     "low": "Быстрое",
     "medium": "Стандарт",
     "high": "Максимум",
 }
 
+# Quality labels for SeeDream model
+SEEDREAM_QUALITY_LABELS: dict[str, str] = {
+    "2k": "2K",
+    "4k": "4K",
+}
 
-def estimate_image_tokens(quality: ImageQuality, size: ImageSize = "1024x1024") -> int:
+
+def is_seedream_model(model: str | None) -> bool:
+    """Check if the model is SeeDream."""
+    return model is not None and model.startswith("seedream")
+
+
+def get_quality_labels_for_model(model: str | None) -> dict[str, str]:
+    """Get quality labels based on model."""
+    if is_seedream_model(model):
+        return SEEDREAM_QUALITY_LABELS
+    return IMAGE_QUALITY_LABELS
+
+
+def get_default_quality_for_model(model: str | None) -> str:
+    """Get default quality for model."""
+    if is_seedream_model(model):
+        return "2k"
+    return "medium"
+
+
+def estimate_image_tokens(quality: str, size: ImageSize = "1024x1024", model: str | None = None) -> int:
     """Return the user-facing token cost for the given quality.
     
     Size does not affect user token cost (only quality matters).
     """
-    return USER_TOKEN_COSTS[quality]
+    # Use appropriate cost table based on model
+    if is_seedream_model(model):
+        return SEEDREAM_TOKEN_COSTS.get(quality, 5)  # Default to 2k cost
+    return GPT_TOKEN_COSTS.get(quality, 5)  # Default to medium cost
 
 
-def estimate_api_tokens(quality: ImageQuality, size: ImageSize) -> int:
+def estimate_api_tokens(quality: str, size: ImageSize) -> int:
     """Return the actual API token cost for internal tracking."""
-    return API_TOKEN_TABLE[quality][size]
+    if quality in API_TOKEN_TABLE and size in API_TOKEN_TABLE[quality]:
+        return API_TOKEN_TABLE[quality][size]
+    return 1000  # Default fallback
 
 
 def calculate_extra_images_cost(images_count: int) -> int:
@@ -110,26 +168,51 @@ def calculate_extra_images_cost(images_count: int) -> int:
         return 2
 
 
-def calculate_total_cost(quality: ImageQuality, images_count: int = 1) -> int:
+def calculate_total_cost(quality: str, images_count: int = 1, model: str | None = None) -> int:
     """Calculate total token cost including extra images.
     
     Args:
         quality: Image quality setting
         images_count: Number of input images (for edit operations)
+        model: Model name (to determine pricing)
     
     Returns:
         Total token cost
     """
-    base_cost = USER_TOKEN_COSTS[quality]
+    base_cost = estimate_image_tokens(quality, model=model)
     extra_cost = calculate_extra_images_cost(images_count)
     return base_cost + extra_cost
 
 
-def is_valid_quality(value: str) -> bool:
-    """Validate image quality string."""
+def is_valid_quality(value: str, model: str | None = None) -> bool:
+    """Validate image quality string based on model."""
+    if is_seedream_model(model):
+        return value in ("2k", "4k")
     return value in ("low", "medium", "high")
 
 
 def is_valid_size(value: str) -> bool:
     """Validate image size string."""
     return value in ("1024x1024", "1024x1536", "1536x1024")
+
+
+def convert_quality_for_model(quality: str, target_model: str | None) -> str:
+    """Convert quality setting when switching models.
+    
+    Maps GPT qualities to SeeDream and vice versa.
+    """
+    if is_seedream_model(target_model):
+        # GPT -> SeeDream
+        mapping = {
+            "low": "2k",
+            "medium": "2k",
+            "high": "4k",
+        }
+        return mapping.get(quality, "2k")
+    else:
+        # SeeDream -> GPT
+        mapping = {
+            "2k": "medium",
+            "4k": "high",
+        }
+        return mapping.get(quality, "medium")

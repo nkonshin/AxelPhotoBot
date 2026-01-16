@@ -266,6 +266,32 @@ class SeeDreamImageProvider(ImageProvider):
         use_model = model or self.model
         return self.MODEL_MAPPING.get(use_model, use_model)
 
+    def _get_seedream_size(self, quality: str | None, size: str | None) -> str:
+        """Map quality and size to SeeDream API size.
+        
+        SeeDream quality mapping:
+        - 2k quality -> 2048x2048 base (or 2048x3072 for portrait, 3072x2048 for landscape)
+        - 4k quality -> 4096x4096 base (or 4096x6144 for portrait, 6144x4096 for landscape)
+        
+        Size mapping (aspect ratio):
+        - 1024x1024 (square) -> WxW
+        - 1024x1536 (portrait) -> Wx1.5W
+        - 1536x1024 (landscape) -> 1.5WxW
+        """
+        # Base resolution based on quality
+        if quality == "4k":
+            base = 4096
+        else:  # 2k or default
+            base = 2048
+        
+        # Aspect ratio based on size
+        if size == "1024x1536":  # Portrait
+            return f"{base}x{int(base * 1.5)}"
+        elif size == "1536x1024":  # Landscape
+            return f"{int(base * 1.5)}x{base}"
+        else:  # Square (default)
+            return f"{base}x{base}"
+
     async def generate(
         self,
         prompt: str,
@@ -276,10 +302,13 @@ class SeeDreamImageProvider(ImageProvider):
         """
         Generate an image using SeeDream API.
         SeeDream returns URLs, not base64.
-        Supports sizes: 1024x1024, 1024x1536, 1536x1024, 2048x2048, etc.
+        
+        Quality determines resolution:
+        - 2k: 2048x2048 (or 2048x3072/3072x2048 for portrait/landscape)
+        - 4k: 4096x4096 (or 4096x6144/6144x4096 for portrait/landscape)
         """
         use_model = self._get_full_model_name(model)
-        use_size = size or "1024x1024"
+        use_size = self._get_seedream_size(quality, size)
 
         logger.info(f"Generating image with SeeDream {use_model}, size: {use_size}, quality: {quality}, prompt: {prompt[:100]}...")
 
@@ -331,14 +360,18 @@ class SeeDreamImageProvider(ImageProvider):
     ) -> GenerationResult:
         """
         Edit an image using SeeDream API.
+        
+        NOTE: SeeDream requires minimum 3686400 pixels (1920x1920) for image editing.
+        Quality determines output resolution (2K or 4K).
 
         image_source can be:
         - A single file_id or URL
         - A JSON array of file_ids (for multiple images)
         """
         use_model = self._get_full_model_name(model)
-        use_size = size or "1024x1024"
-
+        
+        # Use quality-based sizing for SeeDream edit
+        use_size = self._get_seedream_size(quality, size)
         logger.info(f"Editing image with SeeDream {use_model}, size: {use_size}, quality: {quality}, prompt: {prompt[:100]}...")
 
         try:
@@ -357,19 +390,20 @@ class SeeDreamImageProvider(ImageProvider):
             except (json.JSONDecodeError, TypeError):
                 image_sources = [image_source]
 
-            # For SeeDream, we need to get the image URL
-            # If it's a Telegram file_id, download and upload it first
-            image_url = None
-
-            # Use first image for edit (SeeDream might support only one)
+            # Use first image for edit (SeeDream supports only one reference image)
             src = image_sources[0]
+            image_base64 = None
 
             if src.startswith(('http://', 'https://')):
-                # It's already a URL - use directly
-                image_url = src
+                # It's a URL - download and convert to base64
+                async with httpx.AsyncClient() as http_client:
+                    img_response = await http_client.get(src)
+                    img_response.raise_for_status()
+                    image_bytes = img_response.content
+                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                    logger.info(f"Downloaded image from URL: {len(image_bytes)} bytes")
             else:
-                # It's a Telegram file_id - need to get URL
-                # For now, we'll download and send as file
+                # It's a Telegram file_id - download from Telegram
                 if not bot_token:
                     raise ValueError("bot_token required for Telegram file_id")
 
@@ -379,13 +413,17 @@ class SeeDreamImageProvider(ImageProvider):
 
                 try:
                     file = await bot.get_file(src)
-                    # Get direct Telegram URL
-                    image_url = f"https://api.telegram.org/file/bot{bot_token}/{file.file_path}"
-                    logger.info(f"Got Telegram image URL: {image_url}")
+                    file_buffer = io.BytesIO()
+                    await bot.download_file(file.file_path, file_buffer)
+                    image_bytes = file_buffer.getvalue()
+                    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+                    logger.info(f"Downloaded image from Telegram: {len(image_bytes)} bytes")
                 finally:
                     await bot.session.close()
 
-            logger.info(f"Sending edit request to SeeDream with image URL")
+            # Create data URL for SeeDream API
+            image_data_url = f"data:image/jpeg;base64,{image_base64}"
+            logger.info(f"Sending edit request to SeeDream with base64 image ({len(image_base64)} chars)")
 
             # SeeDream uses extra_body for image parameter in edit
             response = await self.client.images.generate(
@@ -395,7 +433,7 @@ class SeeDreamImageProvider(ImageProvider):
                 size=use_size,
                 response_format="url",
                 extra_body={
-                    "image": image_url,
+                    "image": image_data_url,
                     "watermark": False,
                 }
             )

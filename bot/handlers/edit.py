@@ -16,7 +16,9 @@ from bot.services.image_tokens import (
     calculate_extra_images_cost,
     is_valid_quality,
     is_valid_size,
-    IMAGE_QUALITY_LABELS,
+    is_seedream_model,
+    get_quality_labels_for_model,
+    convert_quality_for_model,
 )
 from bot.keyboards.inline import (
     CallbackData,
@@ -92,7 +94,11 @@ async def handle_reply_to_edit(message: Message, state: FSMContext) -> None:
         size = user.image_size
         model = user.selected_model
     
-    cost = calculate_total_cost(quality, images_count=1)
+    cost = calculate_total_cost(quality, images_count=1, model=model)
+    
+    # Convert quality if it doesn't match the model
+    if not is_valid_quality(quality, model):
+        quality = convert_quality_for_model(quality, model)
     
     # Save to state
     await state.update_data(
@@ -118,7 +124,7 @@ async def handle_reply_to_edit(message: Message, state: FSMContext) -> None:
             size=size,
             model=model,
         ),
-        reply_markup=image_settings_confirm_keyboard(quality, size),
+        reply_markup=image_settings_confirm_keyboard(quality, size, model=model),
     )
 
 
@@ -134,7 +140,10 @@ def _build_confirmation_text(
 ) -> str:
     prompt_preview = prompt[:500] + "..." if len(prompt) > 500 else prompt
     confirm_line = "Подтвердить редактирование ещё раз?" if second_confirm else "Подтвердить редактирование?"
-    quality_label = IMAGE_QUALITY_LABELS.get(quality, quality)
+    
+    # Get quality label based on model
+    quality_labels = get_quality_labels_for_model(model)
+    quality_label = quality_labels.get(quality, quality)
     
     # Show extra cost info if multiple images
     images_info = ""
@@ -440,7 +449,11 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
 
     # Calculate cost with new token system
     images_count = len(source_file_ids)
-    cost = calculate_total_cost(quality, images_count)
+    cost = calculate_total_cost(quality, images_count, model=model)
+    
+    # Convert quality if it doesn't match the model
+    if not is_valid_quality(quality, model):
+        quality = convert_quality_for_model(quality, model)
 
     # Save prompt to state
     await state.update_data(
@@ -465,7 +478,7 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
             model=model,
             images_count=images_count,
         ),
-        reply_markup=image_settings_confirm_keyboard(quality, size),
+        reply_markup=image_settings_confirm_keyboard(quality, size, model=model),
     )
 
 
@@ -585,10 +598,7 @@ async def set_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle quality selection while confirming edit."""
 
     value = callback.data.replace(CallbackData.IMAGE_QUALITY_PREFIX, "")
-    if not is_valid_quality(value):
-        await callback.answer("❌ Неверное качество")
-        return
-
+    
     data = await state.get_data()
     prompt = data.get("prompt")
     user_id = data.get("user_id")
@@ -598,6 +608,11 @@ async def set_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
     if not prompt or not user_id or not size or not model:
         await callback.answer("❌ Ошибка состояния")
         await state.clear()
+        return
+
+    # Validate quality for the current model
+    if not is_valid_quality(value, model):
+        await callback.answer("❌ Неверное качество")
         return
 
     await state.update_data(image_quality=value, expensive_confirmed=False)
@@ -612,7 +627,7 @@ async def set_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
     # Get images count from state
     data = await state.get_data()
     images_count = data.get("images_count", 1)
-    cost = calculate_total_cost(value, images_count)
+    cost = calculate_total_cost(value, images_count, model=model)
     
     await callback.message.edit_text(
         text=_build_confirmation_text(
@@ -624,7 +639,7 @@ async def set_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
             model=model,
             images_count=images_count,
         ),
-        reply_markup=image_settings_confirm_keyboard(value, size),
+        reply_markup=image_settings_confirm_keyboard(value, size, model=model),
     )
     await callback.answer()
 
@@ -662,7 +677,7 @@ async def set_edit_size(callback: CallbackQuery, state: FSMContext) -> None:
         balance = user.tokens if user else 0
 
     images_count = data.get("images_count", 1)
-    cost = calculate_total_cost(quality, images_count)
+    cost = calculate_total_cost(quality, images_count, model=model)
     
     await callback.message.edit_text(
         text=_build_confirmation_text(
@@ -674,7 +689,7 @@ async def set_edit_size(callback: CallbackQuery, state: FSMContext) -> None:
             model=model,
             images_count=images_count,
         ),
-        reply_markup=image_settings_confirm_keyboard(quality, value),
+        reply_markup=image_settings_confirm_keyboard(quality, value, model=model),
     )
     await callback.answer()
 
@@ -722,7 +737,7 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
 
     # Calculate cost with new token system
     images_count = len(source_file_ids) if source_file_ids else 1
-    cost = calculate_total_cost(quality, images_count)
+    cost = calculate_total_cost(quality, images_count, model=model)
 
     if cost >= config.high_cost_threshold and not expensive_confirmed:
         session_maker = get_session_maker()
@@ -747,6 +762,7 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
                 quality,
                 size,
                 confirm_callback_data=CallbackData.EXPENSIVE_CONFIRM,
+                model=model,
             ),
         )
         await callback.answer("Подтвердите ещё раз")

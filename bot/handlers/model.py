@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery
 from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository
 from bot.keyboards.inline import model_keyboard
+from bot.services.image_tokens import convert_quality_for_model, is_valid_quality
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,12 @@ async def select_gpt_image_15(callback: CallbackQuery) -> None:
             await callback.answer("✅ GPT Image 1.5 уже выбрана!", show_alert=False)
             return
         
+        # Convert quality if switching from SeeDream
+        new_quality = user.image_quality
+        if not is_valid_quality(user.image_quality, "gpt-image-1.5"):
+            new_quality = convert_quality_for_model(user.image_quality, "gpt-image-1.5")
+            await user_repo.update_image_settings(user.id, image_quality=new_quality)
+        
         await user_repo.update_model(user.id, "gpt-image-1.5")
     
     await callback.message.edit_text(
@@ -116,6 +123,12 @@ async def select_seedream_45(callback: CallbackQuery) -> None:
         if user.selected_model == "seedream-4-5":
             await callback.answer("✅ SeeDream 4.5 уже выбрана!", show_alert=False)
             return
+
+        # Convert quality if switching from GPT models
+        new_quality = user.image_quality
+        if not is_valid_quality(user.image_quality, "seedream-4-5"):
+            new_quality = convert_quality_for_model(user.image_quality, "seedream-4-5")
+            await user_repo.update_image_settings(user.id, image_quality=new_quality)
 
         await user_repo.update_model(user.id, "seedream-4-5")
 

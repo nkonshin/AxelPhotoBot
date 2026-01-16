@@ -7,8 +7,10 @@ from bot.templates.prompts import get_all_templates
 from bot.services.image_tokens import (
     IMAGE_QUALITY_LABELS,
     IMAGE_SIZE_LABELS,
+    SEEDREAM_QUALITY_LABELS,
     ImageQuality,
     ImageSize,
+    is_seedream_model,
 )
 
 
@@ -133,27 +135,46 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
 
 
 def image_settings_confirm_keyboard(
-    current_quality: ImageQuality,
+    current_quality: str,
     current_size: ImageSize,
     confirm_callback_data: str = CallbackData.CONFIRM,
+    model: str | None = None,
 ) -> InlineKeyboardMarkup:
-    """Create keyboard to select image quality/size and confirm/cancel."""
+    """Create keyboard to select image quality/size and confirm/cancel.
+    
+    For GPT models: 3 quality buttons (low/medium/high)
+    For SeeDream: 2 quality buttons (2K/4K)
+    """
 
     builder = InlineKeyboardBuilder()
 
-    # Quality row
-    for quality in ("low", "medium", "high"):
-        label = IMAGE_QUALITY_LABELS[quality]
-        text = f"✅ {label}" if quality == current_quality else label
-        builder.add(
-            InlineKeyboardButton(
-                text=text,
-                callback_data=f"{CallbackData.IMAGE_QUALITY_PREFIX}{quality}",
+    # Quality row - different buttons based on model
+    if is_seedream_model(model):
+        # SeeDream: 2K and 4K buttons
+        for quality in ("2k", "4k"):
+            label = SEEDREAM_QUALITY_LABELS[quality]
+            text = f"✅ {label}" if quality == current_quality else label
+            builder.add(
+                InlineKeyboardButton(
+                    text=text,
+                    callback_data=f"{CallbackData.IMAGE_QUALITY_PREFIX}{quality}",
+                )
             )
-        )
-    builder.adjust(3)
+        builder.adjust(2)
+    else:
+        # GPT: low/medium/high buttons
+        for quality in ("low", "medium", "high"):
+            label = IMAGE_QUALITY_LABELS[quality]
+            text = f"✅ {label}" if quality == current_quality else label
+            builder.add(
+                InlineKeyboardButton(
+                    text=text,
+                    callback_data=f"{CallbackData.IMAGE_QUALITY_PREFIX}{quality}",
+                )
+            )
+        builder.adjust(3)
 
-    # Size row
+    # Size row (same for all models)
     for size in ("1024x1024", "1024x1536", "1536x1024"):
         label = IMAGE_SIZE_LABELS[size]
         text = f"✅ {label}" if size == current_size else label
@@ -163,7 +184,12 @@ def image_settings_confirm_keyboard(
                 callback_data=f"{CallbackData.IMAGE_SIZE_PREFIX}{size}",
             )
         )
-    builder.adjust(3, 3)
+    
+    # Adjust: quality buttons + 3 size buttons
+    if is_seedream_model(model):
+        builder.adjust(2, 3)
+    else:
+        builder.adjust(3, 3)
 
     # Confirm row
     builder.row(
