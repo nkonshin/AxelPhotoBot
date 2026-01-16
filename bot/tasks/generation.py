@@ -483,8 +483,11 @@ async def _send_result_to_user(
             f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>"
         )
 
-        # Simple filename without numbering
-        filename = "GPT_Image.png"
+        # Generate filename based on model
+        if task.model and task.model.startswith("seedream"):
+            filename = "SeeDream-4.5.png"
+        else:
+            filename = "GPT_Image.png"
 
         if is_base64:
             # Decode base64 and send as document
