@@ -64,9 +64,9 @@ async def handle_reply_to_edit(message: Message, state: FSMContext) -> None:
         )
         return
     
-    if len(prompt) > 2000:
+    if len(prompt) > 3000:
         await message.answer(
-            "❌ Описание слишком длинное. Максимум 2000 символов.",
+            "❌ Описание слишком длинное. Максимум 3000 символов.",
             reply_markup=back_keyboard(),
         )
         return
@@ -411,9 +411,9 @@ async def process_edit_prompt(message: Message, state: FSMContext) -> None:
         )
         return
     
-    if len(prompt) > 2000:
+    if len(prompt) > 3000:
         await message.answer(
-            "❌ Описание слишком длинное. Максимум 2000 символов.",
+            "❌ Описание слишком длинное. Максимум 3000 символов.",
             reply_markup=back_keyboard(),
         )
         return

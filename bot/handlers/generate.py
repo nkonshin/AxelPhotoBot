@@ -98,7 +98,7 @@ async def process_prompt(message: Message, state: FSMContext) -> None:
         )
         return
     
-    if len(prompt) > 2000:
+    if len(prompt) > 3000:
         await message.answer(
             ERROR_PROMPT_TOO_LONG,
             reply_markup=back_keyboard(),
