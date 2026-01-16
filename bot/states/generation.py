@@ -31,3 +31,13 @@ class TemplateStates(StatesGroup):
     
     # User is confirming generation from a template
     confirm_template = State()
+
+
+class TemplateEditStates(StatesGroup):
+    """States for the template edit flow (Идеи и тренды - редактирование)."""
+    
+    # User is uploading photos for template edit
+    waiting_photos = State()
+    
+    # User is confirming the template edit
+    confirm_edit = State()

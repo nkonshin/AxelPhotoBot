@@ -45,6 +45,10 @@ class CallbackData:
     
     # Edit template prefix (new edit templates for trends)
     EDIT_TEMPLATE_PREFIX = "edit_tpl:"
+    
+    # Template photos ready
+    TEMPLATE_PHOTOS_READY = "tpl:photos_ready"
+    TEMPLATE_ADD_MORE = "tpl:add_more"
 
     # Image settings
     IMAGE_QUALITY_PREFIX = "img:quality:"
@@ -244,6 +248,31 @@ def templates_keyboard() -> InlineKeyboardMarkup:
     builder.row(
         InlineKeyboardButton(
             text="◀️ Назад в меню",
+            callback_data=CallbackData.BACK_TO_MENU,
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def template_photos_keyboard(photos_count: int) -> InlineKeyboardMarkup:
+    """
+    Create keyboard for template photo upload flow.
+    
+    Shows "Ready" button and photo count.
+    """
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text=f"✅ Готово ({photos_count} фото)",
+            callback_data=CallbackData.TEMPLATE_PHOTOS_READY,
+        )
+    )
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Отмена",
             callback_data=CallbackData.BACK_TO_MENU,
         )
     )

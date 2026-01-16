@@ -1,6 +1,8 @@
 """Handler for Ideas and Trends (Идеи и тренды) - Edit templates."""
 
 import logging
+import asyncio
+import time
 
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, PhotoSize
@@ -28,8 +30,9 @@ from bot.keyboards.inline import (
     main_menu_keyboard,
     insufficient_balance_keyboard,
     templates_keyboard,
+    template_photos_keyboard,
 )
-from bot.states.generation import EditStates
+from bot.states.generation import TemplateEditStates
 
 logger = logging.getLogger(__name__)
 
@@ -134,14 +137,15 @@ async def select_edit_template(callback: CallbackQuery, state: FSMContext) -> No
         user_id=user.id,
         source_file_ids=[],
     )
-    await state.set_state(EditStates.waiting_image)
+    await state.set_state(TemplateEditStates.waiting_photos)
     
     await callback.message.edit_text(
         text=(
             f"💡 <b>{template.name}</b>\n\n"
             f"<b>Описание:</b> {template.description}\n\n"
             f"📸 <b>Отправьте фото</b> для редактирования.\n\n"
-            f"Можно отправить до {MAX_EDIT_IMAGES} фото."
+            f"Можно отправить до {MAX_EDIT_IMAGES} фото.\n"
+            f"После загрузки нажмите кнопку <b>«Готово»</b>."
         ),
         reply_markup=back_keyboard(),
     )
@@ -152,25 +156,22 @@ async def select_edit_template(callback: CallbackQuery, state: FSMContext) -> No
 # PHOTO UPLOAD HANDLERS
 # =============================================================================
 
-@router.message(EditStates.waiting_image, F.photo)
+@router.message(TemplateEditStates.waiting_photos, F.photo)
 async def process_template_photo(message: Message, state: FSMContext) -> None:
     """Process uploaded photo for template editing."""
-    import asyncio
-    import time
-    
     photo: PhotoSize = message.photo[-1]
     file_id = photo.file_id
     
     data = await state.get_data()
     source_file_ids = data.get("source_file_ids", [])
-    template_id = data.get("template_id")
-    
-    # Check if this is a template flow
-    if not template_id:
-        return  # Not a template flow, let other handlers process
+    template_name = data.get("template_name", "Шаблон")
     
     if len(source_file_ids) >= MAX_EDIT_IMAGES:
-        return  # Silently ignore
+        await message.answer(
+            f"❌ Максимум {MAX_EDIT_IMAGES} фото. Нажмите «Готово» для продолжения.",
+            reply_markup=template_photos_keyboard(len(source_file_ids)),
+        )
+        return
     
     source_file_ids.append(file_id)
     current_time = time.time()
@@ -181,7 +182,7 @@ async def process_template_photo(message: Message, state: FSMContext) -> None:
         last_photo_time=current_time,
     )
     
-    # Wait for more photos (debounce)
+    # Wait for more photos (debounce for batch uploads)
     await asyncio.sleep(1.0)
     
     # Re-read state
@@ -191,11 +192,20 @@ async def process_template_photo(message: Message, state: FSMContext) -> None:
     if last_photo_time != current_time:
         return  # Another photo arrived
     
-    # Show confirmation
-    await _show_template_confirmation(message, state)
+    source_file_ids = data.get("source_file_ids", [])
+    photos_count = len(source_file_ids)
+    
+    await message.answer(
+        text=(
+            f"✅ <b>Получено фото: {photos_count}</b>\n\n"
+            f"📎 Можете добавить ещё (до {MAX_EDIT_IMAGES}) или нажмите <b>«Готово»</b>"
+        ),
+        reply_markup=template_photos_keyboard(photos_count),
+        parse_mode="HTML",
+    )
 
 
-@router.message(EditStates.waiting_image, F.document)
+@router.message(TemplateEditStates.waiting_photos, F.document)
 async def process_template_document(message: Message, state: FSMContext) -> None:
     """Process uploaded document for template editing."""
     document = message.document
@@ -209,15 +219,11 @@ async def process_template_document(message: Message, state: FSMContext) -> None
     
     data = await state.get_data()
     source_file_ids = data.get("source_file_ids", [])
-    template_id = data.get("template_id")
-    
-    if not template_id:
-        return
     
     if len(source_file_ids) >= MAX_EDIT_IMAGES:
         await message.answer(
-            f"❌ Максимум {MAX_EDIT_IMAGES} изображений.",
-            reply_markup=back_keyboard(),
+            f"❌ Максимум {MAX_EDIT_IMAGES} фото. Нажмите «Готово» для продолжения.",
+            reply_markup=template_photos_keyboard(len(source_file_ids)),
         )
         return
     
@@ -228,29 +234,66 @@ async def process_template_document(message: Message, state: FSMContext) -> None
         source_file_id=document.file_id if len(source_file_ids) == 1 else data.get("source_file_id"),
     )
     
-    await _show_template_confirmation(message, state)
+    photos_count = len(source_file_ids)
+    
+    await message.answer(
+        text=(
+            f"✅ <b>Получено фото: {photos_count}</b>\n\n"
+            f"📎 Можете добавить ещё (до {MAX_EDIT_IMAGES}) или нажмите <b>«Готово»</b>"
+        ),
+        reply_markup=template_photos_keyboard(photos_count),
+        parse_mode="HTML",
+    )
 
 
-async def _show_template_confirmation(message: Message, state: FSMContext) -> None:
-    """Show confirmation screen after photo upload."""
+@router.message(TemplateEditStates.waiting_photos)
+async def invalid_template_photo_input(message: Message, state: FSMContext) -> None:
+    """Handle invalid input when waiting for photos."""
     data = await state.get_data()
+    source_file_ids = data.get("source_file_ids", [])
+    
+    if source_file_ids:
+        await message.answer(
+            f"📸 У вас уже {len(source_file_ids)} фото. Добавьте ещё или нажмите «Готово».",
+            reply_markup=template_photos_keyboard(len(source_file_ids)),
+        )
+    else:
+        await message.answer(
+            "❌ Пожалуйста, отправьте фото для редактирования.",
+            reply_markup=back_keyboard(),
+        )
+
+
+# =============================================================================
+# PHOTOS READY - User clicks "Готово" button
+# =============================================================================
+
+@router.callback_query(TemplateEditStates.waiting_photos, F.data == CallbackData.TEMPLATE_PHOTOS_READY)
+async def photos_ready(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handle 'Photos ready' button - show confirmation screen."""
+    data = await state.get_data()
+    source_file_ids = data.get("source_file_ids", [])
     template_name = data.get("template_name")
     template_prompt = data.get("template_prompt")
     user_id = data.get("user_id")
-    source_file_ids = data.get("source_file_ids", [])
+    
+    if not source_file_ids:
+        await callback.answer("❌ Сначала загрузите хотя бы одно фото")
+        return
     
     session_maker = get_session_maker()
     
     async with session_maker() as session:
         user_repo = UserRepository(session)
-        user = await user_repo.get_by_telegram_id(message.from_user.id)
+        user = await user_repo.get_by_telegram_id(callback.from_user.id)
         
         if user is None:
-            await message.answer(
+            await callback.message.edit_text(
                 "❌ Пользователь не найден.",
                 reply_markup=main_menu_keyboard(),
             )
             await state.clear()
+            await callback.answer()
             return
         
         balance = user.tokens
@@ -273,9 +316,9 @@ async def _show_template_confirmation(message: Message, state: FSMContext) -> No
         images_count=images_count,
         expensive_confirmed=False,
     )
-    await state.set_state(EditStates.confirm_edit)
+    await state.set_state(TemplateEditStates.confirm_edit)
     
-    await message.answer(
+    await callback.message.edit_text(
         text=_build_template_confirmation_text(
             template_name=template_name,
             prompt=template_prompt,
@@ -288,6 +331,7 @@ async def _show_template_confirmation(message: Message, state: FSMContext) -> No
         ),
         reply_markup=image_settings_confirm_keyboard(quality, size, model=model),
     )
+    await callback.answer()
 
 
 # =============================================================================
@@ -295,7 +339,7 @@ async def _show_template_confirmation(message: Message, state: FSMContext) -> No
 # =============================================================================
 
 @router.callback_query(
-    EditStates.confirm_edit,
+    TemplateEditStates.confirm_edit,
     F.data.startswith(CallbackData.IMAGE_QUALITY_PREFIX),
 )
 async def set_template_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
@@ -310,10 +354,6 @@ async def set_template_edit_quality(callback: CallbackQuery, state: FSMContext) 
     model = data.get("model")
     current_quality = data.get("image_quality")
     images_count = data.get("images_count", 1)
-    
-    # Only process if this is a template flow
-    if not template_name:
-        return  # Let other handlers process
     
     if not prompt or not user_id or not size or not model:
         await callback.answer("❌ Ошибка состояния")
@@ -356,7 +396,7 @@ async def set_template_edit_quality(callback: CallbackQuery, state: FSMContext) 
 
 
 @router.callback_query(
-    EditStates.confirm_edit,
+    TemplateEditStates.confirm_edit,
     F.data.startswith(CallbackData.IMAGE_SIZE_PREFIX),
 )
 async def set_template_edit_size(callback: CallbackQuery, state: FSMContext) -> None:
@@ -375,9 +415,6 @@ async def set_template_edit_size(callback: CallbackQuery, state: FSMContext) -> 
     model = data.get("model")
     current_size = data.get("image_size")
     images_count = data.get("images_count", 1)
-    
-    if not template_name:
-        return  # Let other handlers process
     
     if not prompt or not user_id or not quality or not model:
         await callback.answer("❌ Ошибка состояния")
@@ -419,7 +456,7 @@ async def set_template_edit_size(callback: CallbackQuery, state: FSMContext) -> 
 # CONFIRMATION HANDLERS
 # =============================================================================
 
-@router.callback_query(EditStates.confirm_edit, F.data == CallbackData.CONFIRM)
+@router.callback_query(TemplateEditStates.confirm_edit, F.data == CallbackData.CONFIRM)
 async def confirm_template_edit(callback: CallbackQuery, state: FSMContext) -> None:
     """Confirm and start template edit task."""
     data = await state.get_data()
@@ -433,10 +470,6 @@ async def confirm_template_edit(callback: CallbackQuery, state: FSMContext) -> N
     model = data.get("model")
     expensive_confirmed = data.get("expensive_confirmed", False)
     images_count = data.get("images_count", 1)
-    
-    # Only process if this is a template flow
-    if not template_name:
-        return  # Let other handlers process
     
     if not source_file_id and source_file_ids:
         source_file_id = source_file_ids[0]
@@ -484,15 +517,10 @@ async def confirm_template_edit(callback: CallbackQuery, state: FSMContext) -> N
     await _execute_template_edit(callback, state, data, cost)
 
 
-@router.callback_query(EditStates.confirm_edit, F.data == CallbackData.EXPENSIVE_CONFIRM)
+@router.callback_query(TemplateEditStates.confirm_edit, F.data == CallbackData.EXPENSIVE_CONFIRM)
 async def confirm_template_edit_expensive(callback: CallbackQuery, state: FSMContext) -> None:
     """Second confirmation for expensive template edit."""
     data = await state.get_data()
-    template_name = data.get("template_name")
-    
-    if not template_name:
-        return  # Let other handlers process
-    
     images_count = data.get("images_count", 1)
     quality = data.get("image_quality")
     cost = calculate_total_cost(quality, images_count, model=data.get("model"))
@@ -587,15 +615,24 @@ async def _execute_template_edit(
 # CANCEL HANDLER
 # =============================================================================
 
-@router.callback_query(EditStates.confirm_edit, F.data == CallbackData.CANCEL)
+@router.callback_query(TemplateEditStates.confirm_edit, F.data == CallbackData.CANCEL)
 async def cancel_template_edit(callback: CallbackQuery, state: FSMContext) -> None:
     """Cancel template edit and return to templates list."""
-    data = await state.get_data()
-    template_name = data.get("template_name")
+    await state.clear()
     
-    if not template_name:
-        return  # Let other handlers process
-    
+    await callback.message.edit_text(
+        text=(
+            "💡 <b>Идеи и тренды</b>\n\n"
+            "Выберите готовый шаблон для редактирования фото:"
+        ),
+        reply_markup=templates_keyboard(),
+    )
+    await callback.answer("Отменено")
+
+
+@router.callback_query(TemplateEditStates.waiting_photos, F.data == CallbackData.BACK_TO_MENU)
+async def cancel_photo_upload(callback: CallbackQuery, state: FSMContext) -> None:
+    """Cancel photo upload and return to menu."""
     await state.clear()
     
     await callback.message.edit_text(
