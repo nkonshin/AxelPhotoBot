@@ -843,7 +843,7 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
             "✅ <b>Задача создана!</b>\n\n"
             "⏳ Ваше изображение редактируется...\n"
             "Я отправлю результат, когда будет готово.\n\n"
-            "Это может занять 10-30 секунд."
+            "Это может занять 30-60 секунд."
         ),
         reply_markup=main_menu_keyboard(),
     )
@@ -938,7 +938,7 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
             "✅ <b>Задача создана!</b>\n\n"
             "⏳ Ваше изображение редактируется...\n"
             "Я отправлю результат, когда будет готово.\n\n"
-            "Это может занять 10-30 секунд."
+            "Это может занять 30-60 секунд."
         ),
         reply_markup=main_menu_keyboard(),
     )
