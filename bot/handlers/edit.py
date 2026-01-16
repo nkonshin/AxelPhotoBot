@@ -604,6 +604,7 @@ async def set_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
     user_id = data.get("user_id")
     size = data.get("image_size")
     model = data.get("model")
+    current_quality = data.get("image_quality")
 
     if not prompt or not user_id or not size or not model:
         await callback.answer("❌ Ошибка состояния")
@@ -613,6 +614,11 @@ async def set_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
     # Validate quality for the current model
     if not is_valid_quality(value, model):
         await callback.answer("❌ Неверное качество")
+        return
+
+    # Check if user selected the same quality
+    if value == current_quality:
+        await callback.answer("✅ Уже выбрано")
         return
 
     await state.update_data(image_quality=value, expensive_confirmed=False)
@@ -661,10 +667,16 @@ async def set_edit_size(callback: CallbackQuery, state: FSMContext) -> None:
     user_id = data.get("user_id")
     quality = data.get("image_quality")
     model = data.get("model")
+    current_size = data.get("image_size")
 
     if not prompt or not user_id or not quality or not model:
         await callback.answer("❌ Ошибка состояния")
         await state.clear()
+        return
+
+    # Check if user selected the same size
+    if value == current_size:
+        await callback.answer("✅ Уже выбрано")
         return
 
     await state.update_data(image_size=value, expensive_confirmed=False)
