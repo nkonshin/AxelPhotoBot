@@ -46,7 +46,7 @@ GPT_TOKEN_COSTS: dict[str, int] = {
 # User-facing token costs for SeeDream model
 SEEDREAM_TOKEN_COSTS: dict[str, int] = {
     "2k": 5,
-    "4k": 7,
+    "4k": 5,
 }
 
 # Combined costs (for backward compatibility)
