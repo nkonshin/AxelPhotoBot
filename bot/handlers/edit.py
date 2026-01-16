@@ -19,6 +19,7 @@ from bot.services.image_tokens import (
     is_seedream_model,
     get_quality_labels_for_model,
     convert_quality_for_model,
+    get_actual_resolution,
 )
 from bot.keyboards.inline import (
     CallbackData,
@@ -145,6 +146,9 @@ def _build_confirmation_text(
     quality_labels = get_quality_labels_for_model(model)
     quality_label = quality_labels.get(quality, quality)
     
+    # Get actual resolution
+    actual_resolution = get_actual_resolution(model, quality, size)
+    
     # Show extra cost info if multiple images
     images_info = ""
     if images_count > 1:
@@ -159,7 +163,7 @@ def _build_confirmation_text(
         f"<b>Описание изменений:</b>\n<i>{prompt_preview}</i>\n\n"
         f"<b>Модель:</b> {model}\n"
         f"<b>Качество:</b> {quality_label}\n"
-        f"<b>Формат:</b> {size}{images_info}\n\n"
+        f"<b>Формат:</b> {actual_resolution}{images_info}\n\n"
         f"<b>Стоимость:</b> {cost} 🪙\n"
         f"<b>Ваш баланс:</b> {balance} 🪙\n"
         f"<b>После редактирования:</b> {balance - cost} 🪙\n\n"

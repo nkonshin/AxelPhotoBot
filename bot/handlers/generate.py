@@ -18,6 +18,7 @@ from bot.services.image_tokens import (
     is_seedream_model,
     get_quality_labels_for_model,
     convert_quality_for_model,
+    get_actual_resolution,
 )
 from bot.keyboards.inline import (
     CallbackData,
@@ -67,13 +68,16 @@ def _build_confirmation_text(
     # Get quality label based on model
     quality_labels = get_quality_labels_for_model(model)
     quality_label = quality_labels.get(quality, quality)
+    
+    # Get actual resolution
+    actual_resolution = get_actual_resolution(model, quality, size)
 
     return (
         f"🎨 <b>Подтверждение генерации</b>\n\n"
         f"<b>Ваш промпт:</b>\n<i>{prompt[:500]}{'...' if len(prompt) > 500 else ''}</i>\n\n"
         f"<b>Модель:</b> {model}\n"
         f"<b>Качество:</b> {quality_label}\n"
-        f"<b>Формат:</b> {size}\n\n"
+        f"<b>Формат:</b> {actual_resolution}\n\n"
         f"<b>Стоимость:</b> {cost} 🪙\n"
         f"<b>Ваш баланс:</b> {balance} 🪙\n"
         f"<b>После генерации:</b> {balance - cost} 🪙\n"

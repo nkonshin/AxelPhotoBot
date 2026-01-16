@@ -216,3 +216,38 @@ def convert_quality_for_model(quality: str, target_model: str | None) -> str:
             "4k": "high",
         }
         return mapping.get(quality, "medium")
+
+
+def get_actual_resolution(model: str | None, quality: str, size: str) -> str:
+    """
+    Get the actual resolution for the given model, quality, and size.
+    
+    For SeeDream:
+    - 2K quality: 2048x2048 (square), 2048x3072 (portrait), 3072x2048 (landscape)
+    - 4K quality: 4096x4096 (all aspect ratios)
+    
+    For GPT Image models:
+    - Returns the size as-is (1024x1024, 1024x1536, 1536x1024)
+    
+    Args:
+        model: Model name
+        quality: Quality setting (2k, 4k for SeeDream; low, medium, high for GPT)
+        size: Size setting (1024x1024, 1024x1536, 1536x1024)
+    
+    Returns:
+        Actual resolution string (e.g., "2048x3072")
+    """
+    if is_seedream_model(model):
+        # SeeDream resolution mapping
+        if quality == "4k":
+            return "4096x4096"
+        else:  # 2k or default
+            if size == "1024x1536":  # Portrait
+                return "2048x3072"
+            elif size == "1536x1024":  # Landscape
+                return "3072x2048"
+            else:  # Square
+                return "2048x2048"
+    else:
+        # GPT Image models use the size as-is
+        return size

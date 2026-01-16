@@ -23,7 +23,7 @@ from bot.services.image_provider import (
     GenerationResult,
     ImageProvider,
 )
-from bot.services.image_tokens import estimate_api_tokens, IMAGE_QUALITY_LABELS
+from bot.services.image_tokens import estimate_api_tokens, IMAGE_QUALITY_LABELS, get_actual_resolution
 from bot.services.admin_notify import notify_generation_failure, notify_moderation_block
 
 logger = logging.getLogger(__name__)
@@ -472,13 +472,15 @@ async def _send_result_to_user(
         # Send image to user
         task_type_emoji = "🎨" if task.task_type == "generate" else "🪄"
         task_type_text = "Картинка создана" if task.task_type == "generate" else "Фото отредактировано"
-        prompt_preview = task.prompt[:300] + "..." if len(task.prompt) > 300 else task.prompt
         quality_label = IMAGE_QUALITY_LABELS.get(task.image_quality, task.image_quality)
+        
+        # Get actual resolution based on model and quality
+        actual_resolution = get_actual_resolution(task.model, task.image_quality, task.image_size)
         
         caption = (
             f"{task_type_emoji} <b>{task_type_text}!</b>\n\n"
-            f"<blockquote>{prompt_preview}</blockquote>\n\n"
-            f"⚙️ {quality_label} • {task.image_size}\n"
+            f"<blockquote expandable>{task.prompt}</blockquote>\n\n"
+            f"⚙️ {quality_label} • {actual_resolution}\n"
             f"💰 Списано: {task.tokens_spent} 🪙\n\n"
             f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>"
         )
