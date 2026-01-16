@@ -246,13 +246,6 @@ class OpenAIImageProvider(ImageProvider):
 class SeeDreamImageProvider(ImageProvider):
     """BytePlus ARK SeeDream 4.5 implementation of ImageProvider."""
 
-    # Size mapping from OpenAI format to SeeDream format
-    SIZE_MAPPING = {
-        "1024x1024": "2K",
-        "1024x1536": "2K",
-        "1536x1024": "2K",
-    }
-
     def __init__(self, api_key: str, model: str = "seedream-4-5-251128"):
         self.api_key = api_key
         self.model = model
@@ -261,12 +254,6 @@ class SeeDreamImageProvider(ImageProvider):
             api_key=api_key,
             base_url="https://ark.ap-southeast.bytepluses.com/api/v3",
         )
-
-    def _map_size(self, size: str | None) -> str:
-        """Map OpenAI size format to SeeDream format."""
-        if size and size in self.SIZE_MAPPING:
-            return self.SIZE_MAPPING[size]
-        return "2K"  # Default to 2K
 
     async def generate(
         self,
@@ -278,19 +265,20 @@ class SeeDreamImageProvider(ImageProvider):
         """
         Generate an image using SeeDream API.
         SeeDream returns URLs, not base64.
+        Supports sizes: 1024x1024, 1024x1536, 1536x1024, 2048x2048, etc.
         """
         use_model = model or self.model
-        seedream_size = self._map_size(size)
+        use_size = size or "1024x1024"
 
-        logger.info(f"Generating image with SeeDream {use_model}, size: {seedream_size}, prompt: {prompt[:100]}...")
+        logger.info(f"Generating image with SeeDream {use_model}, size: {use_size}, quality: {quality}, prompt: {prompt[:100]}...")
 
         try:
-            # SeeDream supports response_format="url"
+            # SeeDream supports response_format="url" and standard size format
             response = await self.client.images.generate(
                 model=use_model,
                 prompt=prompt,
                 n=1,
-                size=seedream_size,
+                size=use_size,
                 response_format="url",
                 extra_body={
                     "watermark": False,  # Disable watermark by default
@@ -338,9 +326,9 @@ class SeeDreamImageProvider(ImageProvider):
         - A JSON array of file_ids (for multiple images)
         """
         use_model = model or self.model
-        seedream_size = self._map_size(size)
+        use_size = size or "1024x1024"
 
-        logger.info(f"Editing image with SeeDream {use_model}, size: {seedream_size}, prompt: {prompt[:100]}...")
+        logger.info(f"Editing image with SeeDream {use_model}, size: {use_size}, quality: {quality}, prompt: {prompt[:100]}...")
 
         try:
             import httpx
@@ -393,7 +381,7 @@ class SeeDreamImageProvider(ImageProvider):
                 model=use_model,
                 prompt=prompt,
                 n=1,
-                size=seedream_size,
+                size=use_size,
                 response_format="url",
                 extra_body={
                     "image": image_url,
