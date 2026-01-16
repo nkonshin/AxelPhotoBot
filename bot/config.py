@@ -45,6 +45,9 @@ class Config:
     
     # OpenAI
     openai_api_key: str
+
+    # BytePlus ARK (SeeDream)
+    ark_api_key: str
     
     # App settings
     initial_tokens: int
@@ -97,6 +100,7 @@ def load_config() -> Config:
         database_url=os.getenv("DATABASE_URL", ""),
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
+        ark_api_key=os.getenv("ARK_API_KEY", ""),
         initial_tokens=int(os.getenv("INITIAL_TOKENS", "7")),
 
         log_level=os.getenv("LOG_LEVEL", "INFO"),

@@ -50,9 +50,11 @@ class ImageProvider(ABC):
 # Available models for generation and editing
 # gpt-image-1: Standard GPT image model
 # gpt-image-1.5: Improved GPT image model
+# seedream-4-5: BytePlus SeeDream 4.5 model
 AVAILABLE_MODELS = {
     "gpt-image-1": "GPT Image 1 (Стандартная)",
     "gpt-image-1.5": "GPT Image 1.5 (Улучшенная)",
+    "seedream-4-5": "SeeDream 4.5 (Новейшая)",
 }
 
 DEFAULT_MODEL = "gpt-image-1"
@@ -235,6 +237,189 @@ class OpenAIImageProvider(ImageProvider):
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Image edit failed: {error_msg}")
+            return GenerationResult(
+                success=False,
+                error=error_msg,
+            )
+
+
+class SeeDreamImageProvider(ImageProvider):
+    """BytePlus ARK SeeDream 4.5 implementation of ImageProvider."""
+
+    # Size mapping from OpenAI format to SeeDream format
+    SIZE_MAPPING = {
+        "1024x1024": "2K",
+        "1024x1536": "2K",
+        "1536x1024": "2K",
+    }
+
+    def __init__(self, api_key: str, model: str = "seedream-4-5-251128"):
+        self.api_key = api_key
+        self.model = model
+        # SeeDream uses OpenAI SDK with custom base_url
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url="https://ark.ap-southeast.bytepluses.com/api/v3",
+        )
+
+    def _map_size(self, size: str | None) -> str:
+        """Map OpenAI size format to SeeDream format."""
+        if size and size in self.SIZE_MAPPING:
+            return self.SIZE_MAPPING[size]
+        return "2K"  # Default to 2K
+
+    async def generate(
+        self,
+        prompt: str,
+        model: str = None,
+        quality: str | None = None,
+        size: str | None = None,
+    ) -> GenerationResult:
+        """
+        Generate an image using SeeDream API.
+        SeeDream returns URLs, not base64.
+        """
+        use_model = model or self.model
+        seedream_size = self._map_size(size)
+
+        logger.info(f"Generating image with SeeDream {use_model}, size: {seedream_size}, prompt: {prompt[:100]}...")
+
+        try:
+            # SeeDream supports response_format="url"
+            response = await self.client.images.generate(
+                model=use_model,
+                prompt=prompt,
+                n=1,
+                size=seedream_size,
+                response_format="url",
+                extra_body={
+                    "watermark": False,  # Disable watermark by default
+                }
+            )
+
+            image_data = response.data[0]
+
+            # SeeDream returns URL
+            if hasattr(image_data, 'url') and image_data.url:
+                logger.info(f"Image generated successfully with SeeDream (URL)")
+                return GenerationResult(
+                    success=True,
+                    image_url=image_data.url,
+                )
+            else:
+                logger.error(f"SeeDream returned empty response. Data: {image_data}")
+                return GenerationResult(
+                    success=False,
+                    error="SeeDream не вернул изображение",
+                )
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"SeeDream image generation failed: {error_msg}")
+            return GenerationResult(
+                success=False,
+                error=error_msg,
+            )
+
+    async def edit(
+        self,
+        image_source: str,
+        prompt: str,
+        bot_token: str = None,
+        model: str = None,
+        quality: str | None = None,
+        size: str | None = None,
+    ) -> GenerationResult:
+        """
+        Edit an image using SeeDream API.
+
+        image_source can be:
+        - A single file_id or URL
+        - A JSON array of file_ids (for multiple images)
+        """
+        use_model = model or self.model
+        seedream_size = self._map_size(size)
+
+        logger.info(f"Editing image with SeeDream {use_model}, size: {seedream_size}, prompt: {prompt[:100]}...")
+
+        try:
+            import httpx
+            import io
+            import json
+
+            # Parse image_source - could be single file_id or JSON array
+            image_sources = []
+            try:
+                parsed = json.loads(image_source)
+                if isinstance(parsed, list):
+                    image_sources = parsed
+                else:
+                    image_sources = [image_source]
+            except (json.JSONDecodeError, TypeError):
+                image_sources = [image_source]
+
+            # For SeeDream, we need to get the image URL
+            # If it's a Telegram file_id, download and upload it first
+            image_url = None
+
+            # Use first image for edit (SeeDream might support only one)
+            src = image_sources[0]
+
+            if src.startswith(('http://', 'https://')):
+                # It's already a URL - use directly
+                image_url = src
+            else:
+                # It's a Telegram file_id - need to get URL
+                # For now, we'll download and send as file
+                if not bot_token:
+                    raise ValueError("bot_token required for Telegram file_id")
+
+                from aiogram import Bot
+
+                bot = Bot(token=bot_token)
+
+                try:
+                    file = await bot.get_file(src)
+                    # Get direct Telegram URL
+                    image_url = f"https://api.telegram.org/file/bot{bot_token}/{file.file_path}"
+                    logger.info(f"Got Telegram image URL: {image_url}")
+                finally:
+                    await bot.session.close()
+
+            logger.info(f"Sending edit request to SeeDream with image URL")
+
+            # SeeDream uses extra_body for image parameter in edit
+            response = await self.client.images.generate(
+                model=use_model,
+                prompt=prompt,
+                n=1,
+                size=seedream_size,
+                response_format="url",
+                extra_body={
+                    "image": image_url,
+                    "watermark": False,
+                }
+            )
+
+            image_data = response.data[0]
+
+            # SeeDream returns URL
+            if hasattr(image_data, 'url') and image_data.url:
+                logger.info(f"Image edited successfully with SeeDream (URL)")
+                return GenerationResult(
+                    success=True,
+                    image_url=image_data.url,
+                )
+            else:
+                logger.error(f"SeeDream edit returned empty response")
+                return GenerationResult(
+                    success=False,
+                    error="SeeDream не вернул изображение",
+                )
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"SeeDream image edit failed: {error_msg}")
             return GenerationResult(
                 success=False,
                 error=error_msg,

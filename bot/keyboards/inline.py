@@ -253,17 +253,18 @@ def back_keyboard() -> InlineKeyboardMarkup:
 def model_keyboard(current_model: str = "gpt-image-1.5") -> InlineKeyboardMarkup:
     """
     Create model selection keyboard.
-    
+
     Args:
         current_model: Currently selected model
-    
+
     Layout:
     [GPT Image 1 (устаревшая) - disabled]
     [GPT Image 1.5 ✓]
+    [SeeDream 4.5 ✓]
     [◀️ Назад в меню]
     """
     builder = InlineKeyboardBuilder()
-    
+
     # GPT Image 1 - disabled (показываем но не даём выбрать)
     builder.row(
         InlineKeyboardButton(
@@ -271,7 +272,7 @@ def model_keyboard(current_model: str = "gpt-image-1.5") -> InlineKeyboardMarkup
             callback_data="model:disabled",
         )
     )
-    
+
     # GPT Image 1.5 - active
     gpt15_text = "✅ GPT Image 1.5 (Улучшенная)" if current_model == "gpt-image-1.5" else "GPT Image 1.5 (Улучшенная)"
     builder.row(
@@ -280,14 +281,23 @@ def model_keyboard(current_model: str = "gpt-image-1.5") -> InlineKeyboardMarkup
             callback_data="model:gpt-image-1.5",
         )
     )
-    
+
+    # SeeDream 4.5 - active
+    seedream_text = "✅ SeeDream 4.5 (Новейшая)" if current_model == "seedream-4-5" else "SeeDream 4.5 (Новейшая)"
+    builder.row(
+        InlineKeyboardButton(
+            text=seedream_text,
+            callback_data="model:seedream-4-5",
+        )
+    )
+
     builder.row(
         InlineKeyboardButton(
             text="◀️ Назад в меню",
             callback_data=CallbackData.BACK_TO_MENU,
         )
     )
-    
+
     return builder.as_markup()
 
 
