@@ -270,21 +270,23 @@ class SeeDreamImageProvider(ImageProvider):
         """Map quality and size to SeeDream API size.
         
         SeeDream quality mapping:
-        - 2k quality -> 2048x2048 base (or 2048x3072 for portrait, 3072x2048 for landscape)
-        - 4k quality -> 4096x4096 base (or 4096x6144 for portrait, 6144x4096 for landscape)
+        - 2k quality -> 2048x2048 (square), 2048x3072 (portrait), 3072x2048 (landscape)
+        - 4k quality -> 4096x4096 (all aspect ratios - to stay within 16777216 pixel limit)
         
         Size mapping (aspect ratio):
         - 1024x1024 (square) -> WxW
-        - 1024x1536 (portrait) -> Wx1.5W
-        - 1536x1024 (landscape) -> 1.5WxW
-        """
-        # Base resolution based on quality
-        if quality == "4k":
-            base = 4096
-        else:  # 2k or default
-            base = 2048
+        - 1024x1536 (portrait) -> Wx1.5W (only for 2k)
+        - 1536x1024 (landscape) -> 1.5WxW (only for 2k)
         
-        # Aspect ratio based on size
+        Note: 4K portrait/landscape (4096x6144) exceeds SeeDream's 16777216 pixel limit,
+        so we use 4096x4096 for all 4K generations.
+        """
+        # For 4K quality, always use square to stay within pixel limit
+        if quality == "4k":
+            return "4096x4096"
+        
+        # For 2K quality, support different aspect ratios
+        base = 2048
         if size == "1024x1536":  # Portrait
             return f"{base}x{int(base * 1.5)}"
         elif size == "1536x1024":  # Landscape
