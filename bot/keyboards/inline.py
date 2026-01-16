@@ -4,6 +4,11 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.templates.prompts import get_all_templates
+from bot.templates.edit_templates import (
+    get_all_edit_templates,
+    EXAMPLES_CHANNEL_URL,
+    EXAMPLES_BUTTON_TEXT,
+)
 from bot.services.image_tokens import (
     IMAGE_QUALITY_LABELS,
     IMAGE_SIZE_LABELS,
@@ -35,8 +40,11 @@ class CallbackData:
     # Navigation
     BACK_TO_MENU = "nav:menu"
     
-    # Template prefix
+    # Template prefix (old generation templates)
     TEMPLATE_PREFIX = "template:"
+    
+    # Edit template prefix (new edit templates for trends)
+    EDIT_TEMPLATE_PREFIX = "edit_tpl:"
 
     # Image settings
     IMAGE_QUALITY_PREFIX = "img:quality:"
@@ -208,20 +216,29 @@ def image_settings_confirm_keyboard(
 
 def templates_keyboard() -> InlineKeyboardMarkup:
     """
-    Create keyboard with template options.
+    Create keyboard with edit template options for "Идеи и тренды".
     
-    Shows all available templates as buttons.
+    Shows 4 edit templates + link to examples channel.
     """
     builder = InlineKeyboardBuilder()
     
-    templates = get_all_templates()
+    # Add edit templates (4 buttons)
+    templates = get_all_edit_templates()
     for template in templates:
         builder.row(
             InlineKeyboardButton(
-                text=f"{template.name}",
-                callback_data=f"{CallbackData.TEMPLATE_PREFIX}{template.id}",
+                text=template.name,
+                callback_data=f"{CallbackData.EDIT_TEMPLATE_PREFIX}{template.id}",
             )
         )
+    
+    # Add "More examples" button with link to channel
+    builder.row(
+        InlineKeyboardButton(
+            text=EXAMPLES_BUTTON_TEXT,
+            url=EXAMPLES_CHANNEL_URL,
+        )
+    )
     
     # Add back button
     builder.row(

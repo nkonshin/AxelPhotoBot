@@ -1,9 +1,9 @@
-"""Handler for Ideas and Trends (Идеи и тренды)."""
+"""Handler for Ideas and Trends (Идеи и тренды) - Edit templates."""
 
 import logging
 
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import Message, CallbackQuery, PhotoSize
 from aiogram.fsm.context import FSMContext
 
 from bot.config import config
@@ -11,72 +11,106 @@ from bot.db.database import get_session_maker
 from bot.db.repositories import UserRepository, TaskRepository
 from bot.services.balance import BalanceService, InsufficientBalanceError
 from bot.services.image_tokens import (
-    estimate_image_tokens,
+    calculate_total_cost,
+    calculate_extra_images_cost,
     is_valid_quality,
     is_valid_size,
-    IMAGE_QUALITY_LABELS,
+    is_seedream_model,
+    get_quality_labels_for_model,
+    convert_quality_for_model,
+    get_actual_resolution,
 )
-from bot.templates.prompts import get_template_by_id, get_all_templates
+from bot.templates.edit_templates import get_edit_template_by_id, get_all_edit_templates
 from bot.keyboards.inline import (
     CallbackData,
-    templates_keyboard,
     image_settings_confirm_keyboard,
     back_keyboard,
     main_menu_keyboard,
     insufficient_balance_keyboard,
+    templates_keyboard,
 )
-from bot.states.generation import TemplateStates
+from bot.states.generation import EditStates
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="trends")
 
 
-# Note: Main trends menu is handled in menu.py
-# This router handles template selection and confirmation
+# Maximum number of images for edit
+MAX_EDIT_IMAGES = 10
+
+# Supported image formats
+SUPPORTED_FORMATS = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
+SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def validate_image_format(file_name: str | None, mime_type: str | None) -> bool:
+    """Validate that the image format is supported."""
+    if mime_type and mime_type.lower() in SUPPORTED_FORMATS:
+        return True
+    if file_name:
+        file_name_lower = file_name.lower()
+        for ext in SUPPORTED_EXTENSIONS:
+            if file_name_lower.endswith(ext):
+                return True
+    return False
 
 
 def _build_template_confirmation_text(
     template_name: str,
-    template_description: str,
-    template_prompt: str,
+    prompt: str,
     balance: int,
     cost: int,
     quality: str,
     size: str,
     model: str,
+    images_count: int = 1,
     second_confirm: bool = False,
 ) -> str:
-    prompt_preview = template_prompt[:300] + "..." if len(template_prompt) > 300 else template_prompt
-    confirm_line = "Создать изображение по этому шаблону ещё раз?" if second_confirm else "Создать изображение по этому шаблону?"
-    quality_label = IMAGE_QUALITY_LABELS.get(quality, quality)
+    """Build confirmation text for template edit."""
+    prompt_preview = prompt[:400] + "..." if len(prompt) > 400 else prompt
+    confirm_line = "Подтвердить редактирование ещё раз?" if second_confirm else "Подтвердить редактирование?"
+    
+    quality_labels = get_quality_labels_for_model(model)
+    quality_label = quality_labels.get(quality, quality)
+    actual_resolution = get_actual_resolution(model, quality, size)
+    
+    images_info = ""
+    if images_count > 1:
+        extra_cost = calculate_extra_images_cost(images_count)
+        if extra_cost > 0:
+            images_info = f"\n<b>Изображений:</b> {images_count} (+{extra_cost} 🪙)"
+        else:
+            images_info = f"\n<b>Изображений:</b> {images_count}"
+    
     return (
         f"💡 <b>{template_name}</b>\n\n"
-        f"<b>Описание:</b>\n{template_description}\n\n"
         f"<b>Промпт:</b>\n<i>{prompt_preview}</i>\n\n"
         f"<b>Модель:</b> {model}\n"
         f"<b>Качество:</b> {quality_label}\n"
-        f"<b>Формат:</b> {size}\n\n"
+        f"<b>Формат:</b> {actual_resolution}{images_info}\n\n"
         f"<b>Стоимость:</b> {cost} 🪙\n"
         f"<b>Ваш баланс:</b> {balance} 🪙\n"
-        f"<b>После генерации:</b> {balance - cost} 🪙\n\n"
+        f"<b>После редактирования:</b> {balance - cost} 🪙\n\n"
         f"{confirm_line}"
     )
 
 
-@router.callback_query(F.data.startswith(CallbackData.TEMPLATE_PREFIX))
-async def select_template(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle template selection from trends menu."""
-    # Extract template_id from callback data
-    template_id = callback.data.replace(CallbackData.TEMPLATE_PREFIX, "")
+# =============================================================================
+# TEMPLATE SELECTION - User clicks on a template button
+# =============================================================================
+
+@router.callback_query(F.data.startswith(CallbackData.EDIT_TEMPLATE_PREFIX))
+async def select_edit_template(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handle edit template selection - ask user to upload photo."""
+    template_id = callback.data.replace(CallbackData.EDIT_TEMPLATE_PREFIX, "")
     
-    template = get_template_by_id(template_id)
-    
+    template = get_edit_template_by_id(template_id)
     if template is None:
         await callback.answer("❌ Шаблон не найден")
         return
     
-    # Get user info and balance
+    # Get user info
     user_tg = callback.from_user
     session_maker = get_session_maker()
     
@@ -91,170 +125,323 @@ async def select_template(callback: CallbackQuery, state: FSMContext) -> None:
             )
             await callback.answer()
             return
+    
+    # Save template to state and wait for photo
+    await state.update_data(
+        template_id=template_id,
+        template_name=template.name,
+        template_prompt=template.prompt,
+        user_id=user.id,
+        source_file_ids=[],
+    )
+    await state.set_state(EditStates.waiting_image)
+    
+    await callback.message.edit_text(
+        text=(
+            f"💡 <b>{template.name}</b>\n\n"
+            f"<b>Описание:</b> {template.description}\n\n"
+            f"📸 <b>Отправьте фото</b> для редактирования.\n\n"
+            f"Можно отправить до {MAX_EDIT_IMAGES} фото."
+        ),
+        reply_markup=back_keyboard(),
+    )
+    await callback.answer()
+
+
+# =============================================================================
+# PHOTO UPLOAD HANDLERS
+# =============================================================================
+
+@router.message(EditStates.waiting_image, F.photo)
+async def process_template_photo(message: Message, state: FSMContext) -> None:
+    """Process uploaded photo for template editing."""
+    import asyncio
+    import time
+    
+    photo: PhotoSize = message.photo[-1]
+    file_id = photo.file_id
+    
+    data = await state.get_data()
+    source_file_ids = data.get("source_file_ids", [])
+    template_id = data.get("template_id")
+    
+    # Check if this is a template flow
+    if not template_id:
+        return  # Not a template flow, let other handlers process
+    
+    if len(source_file_ids) >= MAX_EDIT_IMAGES:
+        return  # Silently ignore
+    
+    source_file_ids.append(file_id)
+    current_time = time.time()
+    
+    await state.update_data(
+        source_file_ids=source_file_ids,
+        source_file_id=file_id if len(source_file_ids) == 1 else data.get("source_file_id"),
+        last_photo_time=current_time,
+    )
+    
+    # Wait for more photos (debounce)
+    await asyncio.sleep(1.0)
+    
+    # Re-read state
+    data = await state.get_data()
+    last_photo_time = data.get("last_photo_time", 0)
+    
+    if last_photo_time != current_time:
+        return  # Another photo arrived
+    
+    # Show confirmation
+    await _show_template_confirmation(message, state)
+
+
+@router.message(EditStates.waiting_image, F.document)
+async def process_template_document(message: Message, state: FSMContext) -> None:
+    """Process uploaded document for template editing."""
+    document = message.document
+    
+    if not validate_image_format(document.file_name, document.mime_type):
+        await message.answer(
+            "❌ Неподдерживаемый формат. Используйте JPG, PNG или WEBP.",
+            reply_markup=back_keyboard(),
+        )
+        return
+    
+    data = await state.get_data()
+    source_file_ids = data.get("source_file_ids", [])
+    template_id = data.get("template_id")
+    
+    if not template_id:
+        return
+    
+    if len(source_file_ids) >= MAX_EDIT_IMAGES:
+        await message.answer(
+            f"❌ Максимум {MAX_EDIT_IMAGES} изображений.",
+            reply_markup=back_keyboard(),
+        )
+        return
+    
+    source_file_ids.append(document.file_id)
+    
+    await state.update_data(
+        source_file_ids=source_file_ids,
+        source_file_id=document.file_id if len(source_file_ids) == 1 else data.get("source_file_id"),
+    )
+    
+    await _show_template_confirmation(message, state)
+
+
+async def _show_template_confirmation(message: Message, state: FSMContext) -> None:
+    """Show confirmation screen after photo upload."""
+    data = await state.get_data()
+    template_name = data.get("template_name")
+    template_prompt = data.get("template_prompt")
+    user_id = data.get("user_id")
+    source_file_ids = data.get("source_file_ids", [])
+    
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_telegram_id(message.from_user.id)
+        
+        if user is None:
+            await message.answer(
+                "❌ Пользователь не найден.",
+                reply_markup=main_menu_keyboard(),
+            )
+            await state.clear()
+            return
         
         balance = user.tokens
         quality = user.image_quality
         size = user.image_size
         model = user.selected_model
-
-    cost = estimate_image_tokens(quality, size) * template.tokens_cost
     
-    # Save template to state
+    # Convert quality if needed
+    if not is_valid_quality(quality, model):
+        quality = convert_quality_for_model(quality, model)
+    
+    images_count = len(source_file_ids)
+    cost = calculate_total_cost(quality, images_count, model=model)
+    
     await state.update_data(
-        template_id=template_id,
-        user_id=user.id,
+        prompt=template_prompt,
         image_quality=quality,
         image_size=size,
         model=model,
+        images_count=images_count,
         expensive_confirmed=False,
     )
-    await state.set_state(TemplateStates.confirm_template)
+    await state.set_state(EditStates.confirm_edit)
     
-    # Show template details and confirmation
-    await callback.message.edit_text(
+    await message.answer(
         text=_build_template_confirmation_text(
-            template_name=template.name,
-            template_description=template.description,
-            template_prompt=template.prompt,
+            template_name=template_name,
+            prompt=template_prompt,
             balance=balance,
             cost=cost,
             quality=quality,
             size=size,
             model=model,
+            images_count=images_count,
         ),
-        reply_markup=image_settings_confirm_keyboard(quality, size),
+        reply_markup=image_settings_confirm_keyboard(quality, size, model=model),
     )
-    await callback.answer()
 
+
+# =============================================================================
+# SETTINGS HANDLERS (Quality/Size selection)
+# =============================================================================
 
 @router.callback_query(
-    TemplateStates.confirm_template,
+    EditStates.confirm_edit,
     F.data.startswith(CallbackData.IMAGE_QUALITY_PREFIX),
 )
-async def set_template_quality(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle quality selection while confirming template generation."""
-
+async def set_template_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handle quality selection for template edit."""
     value = callback.data.replace(CallbackData.IMAGE_QUALITY_PREFIX, "")
-    if not is_valid_quality(value):
-        await callback.answer("❌ Неверное качество")
-        return
-
+    
     data = await state.get_data()
-    template_id = data.get("template_id")
+    template_name = data.get("template_name")
+    prompt = data.get("prompt")
     user_id = data.get("user_id")
     size = data.get("image_size")
     model = data.get("model")
-
-    if not template_id or not user_id or not size or not model:
+    current_quality = data.get("image_quality")
+    images_count = data.get("images_count", 1)
+    
+    # Only process if this is a template flow
+    if not template_name:
+        return  # Let other handlers process
+    
+    if not prompt or not user_id or not size or not model:
         await callback.answer("❌ Ошибка состояния")
         await state.clear()
         return
-
-    template = get_template_by_id(template_id)
-    if template is None:
-        await callback.answer("❌ Шаблон не найден")
-        await state.clear()
+    
+    if not is_valid_quality(value, model):
+        await callback.answer("❌ Неверное качество")
         return
-
+    
+    if value == current_quality:
+        await callback.answer("✅ Уже выбрано")
+        return
+    
     await state.update_data(image_quality=value, expensive_confirmed=False)
-
+    
     session_maker = get_session_maker()
     async with session_maker() as session:
         user_repo = UserRepository(session)
         await user_repo.update_image_settings(user_id=user_id, image_quality=value)
         user = await user_repo.get_by_telegram_id(callback.from_user.id)
         balance = user.tokens if user else 0
-
-    cost = estimate_image_tokens(value, size) * template.tokens_cost
+    
+    cost = calculate_total_cost(value, images_count, model=model)
+    
     await callback.message.edit_text(
         text=_build_template_confirmation_text(
-            template_name=template.name,
-            template_description=template.description,
-            template_prompt=template.prompt,
+            template_name=template_name,
+            prompt=prompt,
             balance=balance,
             cost=cost,
             quality=value,
             size=size,
             model=model,
+            images_count=images_count,
         ),
-        reply_markup=image_settings_confirm_keyboard(value, size),
+        reply_markup=image_settings_confirm_keyboard(value, size, model=model),
     )
     await callback.answer()
 
 
 @router.callback_query(
-    TemplateStates.confirm_template,
+    EditStates.confirm_edit,
     F.data.startswith(CallbackData.IMAGE_SIZE_PREFIX),
 )
-async def set_template_size(callback: CallbackQuery, state: FSMContext) -> None:
-    """Handle size selection while confirming template generation."""
-
+async def set_template_edit_size(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handle size selection for template edit."""
     value = callback.data.replace(CallbackData.IMAGE_SIZE_PREFIX, "")
+    
     if not is_valid_size(value):
         await callback.answer("❌ Неверный формат")
         return
-
+    
     data = await state.get_data()
-    template_id = data.get("template_id")
+    template_name = data.get("template_name")
+    prompt = data.get("prompt")
     user_id = data.get("user_id")
     quality = data.get("image_quality")
     model = data.get("model")
-
-    if not template_id or not user_id or not quality or not model:
+    current_size = data.get("image_size")
+    images_count = data.get("images_count", 1)
+    
+    if not template_name:
+        return  # Let other handlers process
+    
+    if not prompt or not user_id or not quality or not model:
         await callback.answer("❌ Ошибка состояния")
         await state.clear()
         return
-
-    template = get_template_by_id(template_id)
-    if template is None:
-        await callback.answer("❌ Шаблон не найден")
-        await state.clear()
+    
+    if value == current_size:
+        await callback.answer("✅ Уже выбрано")
         return
-
+    
     await state.update_data(image_size=value, expensive_confirmed=False)
-
+    
     session_maker = get_session_maker()
     async with session_maker() as session:
         user_repo = UserRepository(session)
         await user_repo.update_image_settings(user_id=user_id, image_size=value)
         user = await user_repo.get_by_telegram_id(callback.from_user.id)
         balance = user.tokens if user else 0
-
-    cost = estimate_image_tokens(quality, value) * template.tokens_cost
+    
+    cost = calculate_total_cost(quality, images_count, model=model)
+    
     await callback.message.edit_text(
         text=_build_template_confirmation_text(
-            template_name=template.name,
-            template_description=template.description,
-            template_prompt=template.prompt,
+            template_name=template_name,
+            prompt=prompt,
             balance=balance,
             cost=cost,
             quality=quality,
             size=value,
             model=model,
+            images_count=images_count,
         ),
-        reply_markup=image_settings_confirm_keyboard(quality, value),
+        reply_markup=image_settings_confirm_keyboard(quality, value, model=model),
     )
     await callback.answer()
 
 
-@router.callback_query(TemplateStates.confirm_template, F.data == CallbackData.CONFIRM)
-async def confirm_template_generation(callback: CallbackQuery, state: FSMContext) -> None:
-    """
-    Confirm and start generation from template.
-    
-    - Deducts tokens
-    - Creates GenerationTask with template prompt
-    - Enqueues task to RQ
-    """
+# =============================================================================
+# CONFIRMATION HANDLERS
+# =============================================================================
+
+@router.callback_query(EditStates.confirm_edit, F.data == CallbackData.CONFIRM)
+async def confirm_template_edit(callback: CallbackQuery, state: FSMContext) -> None:
+    """Confirm and start template edit task."""
     data = await state.get_data()
-    template_id = data.get("template_id")
+    template_name = data.get("template_name")
+    prompt = data.get("prompt")
     user_id = data.get("user_id")
+    source_file_id = data.get("source_file_id")
+    source_file_ids = data.get("source_file_ids", [])
     quality = data.get("image_quality")
     size = data.get("image_size")
     model = data.get("model")
     expensive_confirmed = data.get("expensive_confirmed", False)
+    images_count = data.get("images_count", 1)
     
-    if not template_id or not user_id or not quality or not size or not model:
+    # Only process if this is a template flow
+    if not template_name:
+        return  # Let other handlers process
+    
+    if not source_file_id and source_file_ids:
+        source_file_id = source_file_ids[0]
+    
+    if not prompt or not user_id or not source_file_id or not quality or not size or not model:
         await callback.message.edit_text(
             "❌ Ошибка: данные сессии потеряны. Попробуйте снова.",
             reply_markup=main_menu_keyboard(),
@@ -263,16 +450,75 @@ async def confirm_template_generation(callback: CallbackQuery, state: FSMContext
         await callback.answer()
         return
     
-    template = get_template_by_id(template_id)
+    cost = calculate_total_cost(quality, images_count, model=model)
     
-    if template is None:
+    if cost >= config.high_cost_threshold and not expensive_confirmed:
+        session_maker = get_session_maker()
+        async with session_maker() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_by_telegram_id(callback.from_user.id)
+            balance = user.tokens if user else 0
+        
+        await state.update_data(expensive_confirmed=True)
         await callback.message.edit_text(
-            "❌ Шаблон не найден.",
-            reply_markup=main_menu_keyboard(),
+            text=_build_template_confirmation_text(
+                template_name=template_name,
+                prompt=prompt,
+                balance=balance,
+                cost=cost,
+                quality=quality,
+                size=size,
+                model=model,
+                images_count=images_count,
+                second_confirm=True,
+            ),
+            reply_markup=image_settings_confirm_keyboard(
+                quality, size,
+                confirm_callback_data=CallbackData.EXPENSIVE_CONFIRM,
+                model=model,
+            ),
         )
-        await state.clear()
-        await callback.answer()
+        await callback.answer("Подтвердите ещё раз")
         return
+    
+    await _execute_template_edit(callback, state, data, cost)
+
+
+@router.callback_query(EditStates.confirm_edit, F.data == CallbackData.EXPENSIVE_CONFIRM)
+async def confirm_template_edit_expensive(callback: CallbackQuery, state: FSMContext) -> None:
+    """Second confirmation for expensive template edit."""
+    data = await state.get_data()
+    template_name = data.get("template_name")
+    
+    if not template_name:
+        return  # Let other handlers process
+    
+    images_count = data.get("images_count", 1)
+    quality = data.get("image_quality")
+    cost = calculate_total_cost(quality, images_count, model=data.get("model"))
+    
+    await _execute_template_edit(callback, state, data, cost)
+
+
+async def _execute_template_edit(
+    callback: CallbackQuery,
+    state: FSMContext,
+    data: dict,
+    cost: int,
+) -> None:
+    """Execute the template edit task."""
+    template_name = data.get("template_name")
+    prompt = data.get("prompt")
+    user_id = data.get("user_id")
+    source_file_id = data.get("source_file_id")
+    source_file_ids = data.get("source_file_ids", [])
+    quality = data.get("image_quality")
+    size = data.get("image_size")
+    model = data.get("model")
+    images_count = data.get("images_count", 1)
+    
+    if not source_file_id and source_file_ids:
+        source_file_id = source_file_ids[0]
     
     session_maker = get_session_maker()
     
@@ -281,53 +527,26 @@ async def confirm_template_generation(callback: CallbackQuery, state: FSMContext
         task_repo = TaskRepository(session)
         
         try:
-            cost = estimate_image_tokens(quality, size) * template.tokens_cost
-
-            if cost >= config.high_cost_threshold and not expensive_confirmed:
-                user_repo = UserRepository(session)
-                user = await user_repo.get_by_telegram_id(callback.from_user.id)
-                balance = user.tokens if user else 0
-
-                await state.update_data(expensive_confirmed=True)
-                await callback.message.edit_text(
-                    text=_build_template_confirmation_text(
-                        template_name=template.name,
-                        template_description=template.description,
-                        template_prompt=template.prompt,
-                        balance=balance,
-                        cost=cost,
-                        quality=quality,
-                        size=size,
-                        model=model,
-                        second_confirm=True,
-                    ),
-                    reply_markup=image_settings_confirm_keyboard(
-                        quality,
-                        size,
-                        confirm_callback_data=CallbackData.EXPENSIVE_CONFIRM,
-                    ),
-                )
-                await callback.answer("Подтвердите ещё раз")
-                return
-
-            # Deduct tokens
             await balance_service.deduct_tokens(user_id, cost)
             
-            # Create task with template prompt
+            source_data = source_file_id
+            if source_file_ids and len(source_file_ids) > 1:
+                import json
+                source_data = json.dumps(source_file_ids)
+            
             task = await task_repo.create(
                 user_id=user_id,
-                task_type="generate",
-                prompt=template.prompt,
+                task_type="edit",
+                prompt=prompt,
                 tokens_spent=cost,
                 model=model,
                 image_quality=quality,
                 image_size=size,
+                source_image_url=source_data,
+                images_count=images_count,
             )
             
-            logger.info(
-                f"Created template task {task.id} for user {user_id} "
-                f"(template: {template_id})"
-            )
+            logger.info(f"Created template edit task {task.id} for user {user_id}")
             
         except InsufficientBalanceError as e:
             await callback.message.edit_text(
@@ -343,10 +562,8 @@ async def confirm_template_generation(callback: CallbackQuery, state: FSMContext
             await callback.answer()
             return
     
-    # Clear state
     await state.clear()
     
-    # Enqueue task to RQ
     try:
         from bot.tasks.generation import enqueue_generation_task
         enqueue_generation_task(task.id)
@@ -356,118 +573,35 @@ async def confirm_template_generation(callback: CallbackQuery, state: FSMContext
     await callback.message.edit_text(
         text=(
             f"✅ <b>Задача создана!</b>\n\n"
-            f"📝 Шаблон: {template.name}\n\n"
-            "⏳ Ваше изображение генерируется...\n"
+            f"📝 Шаблон: {template_name}\n\n"
+            "⏳ Ваше изображение редактируется...\n"
             "Я отправлю результат, когда будет готово.\n\n"
-            "Это может занять 30-60 секунд."
+            "Это может занять 10-30 секунд."
         ),
         reply_markup=main_menu_keyboard(),
     )
-    await callback.answer("Генерация запущена! ⏳")
+    await callback.answer("Редактирование запущено! ⏳")
 
 
-@router.callback_query(
-    TemplateStates.confirm_template,
-    F.data == CallbackData.EXPENSIVE_CONFIRM,
-)
-async def confirm_template_generation_expensive(callback: CallbackQuery, state: FSMContext) -> None:
-    """Second step confirmation for expensive template generation."""
+# =============================================================================
+# CANCEL HANDLER
+# =============================================================================
 
+@router.callback_query(EditStates.confirm_edit, F.data == CallbackData.CANCEL)
+async def cancel_template_edit(callback: CallbackQuery, state: FSMContext) -> None:
+    """Cancel template edit and return to templates list."""
     data = await state.get_data()
-    template_id = data.get("template_id")
-    user_id = data.get("user_id")
-    quality = data.get("image_quality")
-    size = data.get("image_size")
-    model = data.get("model")
-
-    if not template_id or not user_id or not quality or not size or not model:
-        await callback.message.edit_text(
-            "❌ Ошибка: данные сессии потеряны. Попробуйте снова.",
-            reply_markup=main_menu_keyboard(),
-        )
-        await state.clear()
-        await callback.answer()
-        return
-
-    template = get_template_by_id(template_id)
-    if template is None:
-        await callback.message.edit_text(
-            "❌ Шаблон не найден.",
-            reply_markup=main_menu_keyboard(),
-        )
-        await state.clear()
-        await callback.answer()
-        return
-
-    cost = estimate_image_tokens(quality, size) * template.tokens_cost
-
-    session_maker = get_session_maker()
-    async with session_maker() as session:
-        balance_service = BalanceService(session)
-        task_repo = TaskRepository(session)
-
-        try:
-            await balance_service.deduct_tokens(user_id, cost)
-
-            task = await task_repo.create(
-                user_id=user_id,
-                task_type="generate",
-                prompt=template.prompt,
-                tokens_spent=cost,
-                model=model,
-                image_quality=quality,
-                image_size=size,
-            )
-
-            logger.info(
-                f"Created template task {task.id} for user {user_id} "
-                f"(template: {template_id})"
-            )
-
-        except InsufficientBalanceError as e:
-            await callback.message.edit_text(
-                text=(
-                    "Ой! Кажется, токены закончились 📸\n\n"
-                    f"Требуется: {e.required} 🪙\n"
-                    f"Ваш баланс: {e.available} 🪙\n\n"
-                    "Пополни баланс в магазине, чтобы продолжить! 👾"
-                ),
-                reply_markup=insufficient_balance_keyboard(),
-            )
-            await state.clear()
-            await callback.answer()
-            return
-
-    await state.clear()
-
-    try:
-        from bot.tasks.generation import enqueue_generation_task
-        enqueue_generation_task(task.id)
-    except Exception as e:
-        logger.error(f"Failed to enqueue task {task.id}: {e}")
-
-    await callback.message.edit_text(
-        text=(
-            f"✅ <b>Задача создана!</b>\n\n"
-            f"📝 Шаблон: {template.name}\n\n"
-            "⏳ Ваше изображение генерируется...\n"
-            "Я отправлю результат, когда будет готово.\n\n"
-            "Это может занять 30-60 секунд."
-        ),
-        reply_markup=main_menu_keyboard(),
-    )
-    await callback.answer("Генерация запущена! ⏳")
-
-
-@router.callback_query(TemplateStates.confirm_template, F.data == CallbackData.CANCEL)
-async def cancel_template_generation(callback: CallbackQuery, state: FSMContext) -> None:
-    """Cancel template generation and return to templates list."""
+    template_name = data.get("template_name")
+    
+    if not template_name:
+        return  # Let other handlers process
+    
     await state.clear()
     
     await callback.message.edit_text(
         text=(
             "💡 <b>Идеи и тренды</b>\n\n"
-            "Выберите готовый шаблон для быстрой генерации:"
+            "Выберите готовый шаблон для редактирования фото:"
         ),
         reply_markup=templates_keyboard(),
     )

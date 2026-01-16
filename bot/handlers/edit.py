@@ -604,6 +604,11 @@ async def set_edit_quality(callback: CallbackQuery, state: FSMContext) -> None:
     value = callback.data.replace(CallbackData.IMAGE_QUALITY_PREFIX, "")
     
     data = await state.get_data()
+    
+    # Skip if this is a template flow (handled by trends.py)
+    if data.get("template_name"):
+        return
+    
     prompt = data.get("prompt")
     user_id = data.get("user_id")
     size = data.get("image_size")
@@ -667,6 +672,11 @@ async def set_edit_size(callback: CallbackQuery, state: FSMContext) -> None:
         return
 
     data = await state.get_data()
+    
+    # Skip if this is a template flow (handled by trends.py)
+    if data.get("template_name"):
+        return
+    
     prompt = data.get("prompt")
     user_id = data.get("user_id")
     quality = data.get("image_quality")
@@ -729,6 +739,11 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
     - Enqueues task to RQ
     """
     data = await state.get_data()
+    
+    # Skip if this is a template flow (handled by trends.py)
+    if data.get("template_name"):
+        return
+    
     prompt = data.get("prompt")
     user_id = data.get("user_id")
     source_file_id = data.get("source_file_id")
@@ -858,6 +873,11 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
     """Second step confirmation for expensive edit."""
 
     data = await state.get_data()
+    
+    # Skip if this is a template flow (handled by trends.py)
+    if data.get("template_name"):
+        return
+    
     prompt = data.get("prompt")
     user_id = data.get("user_id")
     source_file_id = data.get("source_file_id")
