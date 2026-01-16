@@ -164,7 +164,7 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 await _update_progress_message(
                     telegram_id,
                     animation_message_id,
-                    "⏳ <b>Генерация в процессе...</b>\n\n✨ Создаю изображение...\n<i>Это может занять 10-30 секунд</i>"
+                    "⏳ <b>Генерация в процессе...</b>\n\n✨ Создаю изображение...\n<i>Это может занять 30-60 секунд</i>"
                 )
             
             # Generate or edit based on task type
@@ -445,7 +445,7 @@ async def _send_result_to_user(
     
     try:
         from aiogram import Bot
-        from aiogram.types import BufferedInputFile
+        from aiogram.types import BufferedInputFile, URLInputFile
         from bot.keyboards.inline import result_feedback_keyboard
         import base64
         
@@ -524,9 +524,13 @@ async def _send_result_to_user(
             # Send URL as document (Telegram will fetch it)
             send_start = time.time()
             logger.info(f"Task {task.id}: Sending URL document to user {telegram_id}")
+            
+            # Create URLInputFile with custom filename
+            url_file = URLInputFile(image_data, filename=filename)
+            
             sent = await bot.send_document(
                 chat_id=telegram_id,
-                document=image_data,
+                document=url_file,
                 caption=caption,
                 parse_mode="HTML",
                 reply_markup=result_feedback_keyboard(task.id),
