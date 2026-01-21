@@ -102,7 +102,6 @@ async def _process_generation_task_async(task_id: int) -> bool:
     logger.info(f"Processing generation task {task_id}")
     
     session_maker = get_session_maker()
-    progress_animator = None
     telegram_id = None
     
     async with session_maker() as session:
@@ -115,7 +114,7 @@ async def _process_generation_task_async(task_id: int) -> bool:
             logger.error(f"Task {task_id} not found")
             return False
         
-        # Get user's telegram_id for animation
+        # Get user's telegram_id
         from sqlalchemy import select
         from bot.db.models import User
         
@@ -127,17 +126,6 @@ async def _process_generation_task_async(task_id: int) -> bool:
         # Update status to processing
         await task_repo.update_status(task_id, status="processing")
         logger.info(f"Task {task_id} status updated to processing")
-        
-        # Start animated progress
-        if telegram_id:
-            from bot.utils.progress_animation import ProgressAnimator
-            progress_animator = ProgressAnimator(
-                telegram_id=telegram_id,
-                bot_token=config.bot_token,
-                task_type=task.task_type,
-                total_steps=5,
-            )
-            await progress_animator.start()
         
         try:
             # Initialize image provider based on model
@@ -179,9 +167,7 @@ async def _process_generation_task_async(task_id: int) -> bool:
             else:
                 raise ValueError(f"Unknown task type: {task.task_type}")
             
-            # Stop animation
-            if progress_animator:
-                await progress_animator.stop()
+            # Animation will be automatically replaced by result message
             
             if result.success and (result.image_url or result.image_base64):
                 # Calculate API tokens for admin tracking
@@ -224,9 +210,7 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 raise GenerationError(error_msg)
         
         except ModerationError as e:
-            # Stop animation on error
-            if progress_animator:
-                await progress_animator.stop()
+            # Animation will be automatically replaced by error message
             
             error_msg = str(e)
             logger.warning(f"Task {task_id} blocked by moderation: {error_msg}")
@@ -254,9 +238,7 @@ async def _process_generation_task_async(task_id: int) -> bool:
             return False
         
         except Exception as e:
-            # Stop animation on error
-            if progress_animator:
-                await progress_animator.stop()
+            # Animation will be automatically replaced by error message
             
             # Handle failure
             error_msg = str(e)
@@ -394,13 +376,14 @@ async def _send_result_to_user(
         caption = (
             f"{task_type_emoji} <b>{task_type_text}!</b>\n\n"
             f"<blockquote expandable>{prompt_text}</blockquote>\n\n"
-            f"⚙️ {quality_label} • {actual_resolution}\n"
+            f"⚙️ {quality_label} • \n"
             f"💰 Списано: {task.tokens_spent} 🪙\n\n"
             f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>\n\n"
             f"❓ <b>Не понравился результат?</b>\n"
             f"• Попробуйте нашу новую модель в главном меню!\n"
             f"• Измените фото или добавьте другие\n"
-            f"• Измените промпт или попробуйте один из шаблонов"
+            f"• Измените промпт или попробуйте один из шаблонов\n\n"
+            f"Сделано в @AxelPhotobot"
         )
 
         # Generate filename based on model

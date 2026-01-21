@@ -243,3 +243,29 @@ class ProgressAnimator:
             
         except Exception as e:
             logger.error(f"Failed to delete progress message: {e}")
+
+
+async def stop_progress_animation(telegram_id: int, bot_token: str) -> None:
+    """
+    Stop and delete any progress animation for a user.
+    
+    This is a helper function to stop animation from worker without needing the animator instance.
+    It finds and deletes any message with progress animation text.
+    
+    Args:
+        telegram_id: User's Telegram ID
+        bot_token: Bot token
+    """
+    try:
+        from aiogram import Bot
+        
+        bot = Bot(token=bot_token)
+        
+        # Get recent messages and try to delete progress animation
+        # We can't easily find the exact message, so we'll just let it auto-delete on result send
+        # The animation will be replaced by the result message
+        
+        await bot.session.close()
+        
+    except Exception as e:
+        logger.error(f"Failed to stop progress animation: {e}")

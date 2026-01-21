@@ -368,6 +368,18 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
     # Clear state
     await state.clear()
     
+    # Start progress animation immediately
+    from bot.utils.progress_animation import ProgressAnimator
+    from bot.config import config
+    
+    progress_animator = ProgressAnimator(
+        telegram_id=callback.from_user.id,
+        bot_token=config.bot_token,
+        task_type="generate",
+        total_steps=5,
+    )
+    await progress_animator.start()
+    
     # Enqueue task to RQ (import here to avoid circular imports)
     try:
         from bot.tasks.generation import enqueue_generation_task
@@ -376,7 +388,7 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
         logger.error(f"Failed to enqueue task {task.id}: {e}")
         # Task is created, worker will pick it up eventually
     
-    # Don't send "Task created" message - progress animation will appear automatically
+    # Delete confirmation message
     await callback.message.delete()
     await callback.answer(CALLBACK_GENERATION_STARTED)
 
@@ -443,13 +455,25 @@ async def confirm_generation_expensive(callback: CallbackQuery, state: FSMContex
 
     await state.clear()
 
+    # Start progress animation immediately
+    from bot.utils.progress_animation import ProgressAnimator
+    from bot.config import config
+    
+    progress_animator = ProgressAnimator(
+        telegram_id=callback.from_user.id,
+        bot_token=config.bot_token,
+        task_type="generate",
+        total_steps=5,
+    )
+    await progress_animator.start()
+
     try:
         from bot.tasks.generation import enqueue_generation_task
         enqueue_generation_task(task.id)
     except Exception as e:
         logger.error(f"Failed to enqueue task {task.id}: {e}")
 
-    # Don't send "Task created" message - progress animation will appear automatically
+    # Delete confirmation message
     await callback.message.delete()
     await callback.answer(CALLBACK_GENERATION_STARTED)
 
