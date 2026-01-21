@@ -33,6 +33,41 @@ logger = logging.getLogger(__name__)
 router = Router(name="menu")
 
 
+@router.callback_query(F.data == "main_menu")
+async def main_menu_callback(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handle main menu button from result message."""
+    # Answer callback immediately to prevent timeout
+    await callback.answer()
+    
+    # Clear any FSM state
+    await state.clear()
+    
+    # Get user info for personalized message
+    user_tg = callback.from_user
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_telegram_id(user_tg.id)
+        balance = user.tokens if user else 0
+    
+    user_name = user_tg.first_name or user_tg.username or "друг"
+    max_generations = balance // 2  # Low quality = 2 tokens
+    
+    # Show low balance warning if 3 or fewer tokens
+    low_balance_warning = LOW_BALANCE_WARNING if balance <= 3 else ""
+    
+    await callback.message.answer(
+        text=MENU_MESSAGE.format(
+            user_name=user_name,
+            balance=balance,
+            max_generations=max_generations,
+            low_balance_warning=low_balance_warning,
+        ),
+        reply_markup=main_menu_keyboard(),
+    )
+
+
 @router.callback_query(F.data == CallbackData.BACK_TO_MENU)
 async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle back to menu button - return to main menu."""

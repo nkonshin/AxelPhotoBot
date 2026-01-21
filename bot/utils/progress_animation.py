@@ -3,7 +3,7 @@
 import asyncio
 import random
 import time
-from typing import Optional
+from typing import Optional, List
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,26 @@ PROGRESS_PHRASES = [
     "Финальные штрихи",
     "Почти готово, осталось совсем чуть-чуть",
     "Добавляю последние детали",
+]
+
+
+# Последовательные надписи для редактирования (меняются по порядку)
+EDIT_SUBTITLES = [
+    "Изучаю ваше фото",
+    "Понимаю что нужно изменить",
+    "Применяю изменения",
+    "Дорабатываю детали",
+    "Финализирую результат",
+]
+
+
+# Последовательные надписи для генерации
+GENERATE_SUBTITLES = [
+    "Анализирую ваш запрос",
+    "Создаю композицию",
+    "Прорисовываю детали",
+    "Добавляю финальные штрихи",
+    "Готовлю результат",
 ]
 
 
@@ -54,18 +74,19 @@ class ProgressAnimator:
         self.start_time = time.time()
         self.current_step = 1
         self.current_progress = 0
+        self.current_subtitle_index = 0
         self.is_running = False
         self.animation_task: Optional[asyncio.Task] = None
         
-        # Task type emoji and text
+        # Task type emoji, title and subtitles
         if task_type == "edit":
             self.emoji = "✏️"
             self.title = "Редактирование"
-            self.subtitle = "Применяю изменения"
+            self.subtitles = EDIT_SUBTITLES
         else:
             self.emoji = "🎨"
             self.title = "Генерация"
-            self.subtitle = "Создаю изображение"
+            self.subtitles = GENERATE_SUBTITLES
     
     async def start(self) -> None:
         """Start the progress animation."""
@@ -123,8 +144,8 @@ class ProgressAnimator:
         """Main animation loop that updates progress periodically."""
         try:
             while self.is_running:
-                # Random delay between 5-10 seconds
-                delay = random.uniform(5, 10)
+                # Random delay between 7-12 seconds
+                delay = random.uniform(7, 12)
                 await asyncio.sleep(delay)
                 
                 if not self.is_running:
@@ -157,6 +178,10 @@ class ProgressAnimator:
             if expected_step > self.current_step and expected_step <= self.total_steps:
                 self.current_step = expected_step
             
+            # Move to next subtitle if available
+            if self.current_subtitle_index < len(self.subtitles) - 1:
+                self.current_subtitle_index += 1
+            
             text = self._build_progress_text()
             
             await bot.edit_message_text(
@@ -183,12 +208,15 @@ class ProgressAnimator:
         
         progress_bar = "🟩" * filled_blocks + "⬜" * empty_blocks
         
+        # Get current subtitle
+        subtitle = self.subtitles[self.current_subtitle_index]
+        
         # Random motivational phrase
         phrase = random.choice(PROGRESS_PHRASES)
         
         text = (
-            f"{self.emoji} <b>{self.title}</b>\n"
-            f"{self.subtitle}\n\n"
+            f"{self.emoji} <b>{self.title}</b>\n\n"
+            f"{subtitle}\n\n"
             f"{progress_bar} {self.current_progress}%\n\n"
             f"⏱ Прошло: {elapsed}с • Шаг {self.current_step}/{self.total_steps}\n\n"
             f"<i>{phrase}</i>"

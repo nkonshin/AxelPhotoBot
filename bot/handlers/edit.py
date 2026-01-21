@@ -838,15 +838,8 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
     except Exception as e:
         logger.error(f"Failed to enqueue task {task.id}: {e}")
     
-    await callback.message.edit_text(
-        text=(
-            "✅ <b>Задача создана!</b>\n\n"
-            "⏳ Ваше изображение редактируется...\n"
-            "Я отправлю результат, когда будет готово.\n\n"
-            "Это может занять 30-60 секунд."
-        ),
-        reply_markup=main_menu_keyboard(),
-    )
+    # Don't send "Task created" message - progress animation will appear automatically
+    await callback.message.delete()
     await callback.answer("Редактирование запущено! ⏳")
 
 
@@ -933,15 +926,8 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
     except Exception as e:
         logger.error(f"Failed to enqueue task {task.id}: {e}")
 
-    await callback.message.edit_text(
-        text=(
-            "✅ <b>Задача создана!</b>\n\n"
-            "⏳ Ваше изображение редактируется...\n"
-            "Я отправлю результат, когда будет готово.\n\n"
-            "Это может занять 30-60 секунд."
-        ),
-        reply_markup=main_menu_keyboard(),
-    )
+    # Don't send "Task created" message - progress animation will appear automatically
+    await callback.message.delete()
     await callback.answer("Редактирование запущено! ⏳")
 
 

@@ -376,10 +376,8 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
         logger.error(f"Failed to enqueue task {task.id}: {e}")
         # Task is created, worker will pick it up eventually
     
-    await callback.message.edit_text(
-        text=GENERATE_TASK_CREATED,
-        reply_markup=main_menu_keyboard(),
-    )
+    # Don't send "Task created" message - progress animation will appear automatically
+    await callback.message.delete()
     await callback.answer(CALLBACK_GENERATION_STARTED)
 
 
@@ -451,10 +449,8 @@ async def confirm_generation_expensive(callback: CallbackQuery, state: FSMContex
     except Exception as e:
         logger.error(f"Failed to enqueue task {task.id}: {e}")
 
-    await callback.message.edit_text(
-        text=GENERATE_TASK_CREATED,
-        reply_markup=main_menu_keyboard(),
-    )
+    # Don't send "Task created" message - progress animation will appear automatically
+    await callback.message.delete()
     await callback.answer(CALLBACK_GENERATION_STARTED)
 
 

@@ -546,16 +546,17 @@ def result_feedback_keyboard(task_id: int) -> InlineKeyboardMarkup:
         task_id: The task ID for feedback
     
     Layout:
-    [🔄 Ещё раз                    ]
+    [🔄 Сгенерировать ещё раз                    ]
     [✏️ Изменить промпт            ]
     [👍] [👎]
+    [🏠 Главное меню]
     """
     builder = InlineKeyboardBuilder()
     
     # Regenerate button (full width)
     builder.row(
         InlineKeyboardButton(
-            text="🔄 Ещё раз",
+            text="🔄 Сгенерировать ещё раз",
             callback_data=f"{CallbackData.REGENERATE_PREFIX}{task_id}",
         ),
     )
@@ -577,6 +578,14 @@ def result_feedback_keyboard(task_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text="👎",
             callback_data=f"{CallbackData.FEEDBACK_NEGATIVE_PREFIX}{task_id}",
+        ),
+    )
+    
+    # Main menu button (full width)
+    builder.row(
+        InlineKeyboardButton(
+            text="🏠 Главное меню",
+            callback_data="main_menu",
         ),
     )
     
