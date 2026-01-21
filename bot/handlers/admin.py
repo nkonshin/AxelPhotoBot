@@ -91,26 +91,63 @@ def admin_menu_keyboard():
     """Create admin menu keyboard."""
     builder = InlineKeyboardBuilder()
     
+    # Row 1: Main stats
     builder.row(
         InlineKeyboardButton(
-            text="📊 Статистика",
+            text="📊 Общая статистика",
             callback_data="admin:stats",
         ),
-        InlineKeyboardButton(
-            text="👥 Топ пользователей",
-            callback_data="admin:top_users",
-        ),
     )
+    
+    # Row 2: Generations and errors
     builder.row(
         InlineKeyboardButton(
-            text="📈 Использование моделей",
+            text="� Последние генерации",
+            callback_data="admin:generations",
+        ),
+        InlineKeyboardButton(
+            text="⚠️ Ошибки",
+            callback_data="admin:errors",
+        ),
+    )
+    
+    # Row 3: Users and models
+    builder.row(
+        InlineKeyboardButton(
+            text="� Топ пользователей",
+            callback_data="admin:top_users",
+        ),
+        InlineKeyboardButton(
+            text="� Модели",
             callback_data="admin:model_usage",
+        ),
+    )
+    
+    # Row 4: Finance and monitoring
+    builder.row(
+        InlineKeyboardButton(
+            text="💰 Финансы",
+            callback_data="admin:finance",
+        ),
+        InlineKeyboardButton(
+            text="🔴 Live",
+            callback_data="admin:live",
+        ),
+    )
+    
+    # Row 5: Export and settings
+    builder.row(
+        InlineKeyboardButton(
+            text="📥 Экспорт",
+            callback_data="admin:export",
         ),
         InlineKeyboardButton(
             text="🔄 Обновить",
             callback_data="admin:refresh",
         ),
     )
+    
+    # Row 6: Help and subscription
     builder.row(
         InlineKeyboardButton(
             text="📋 Справка",
@@ -122,6 +159,73 @@ def admin_menu_keyboard():
         ),
     )
     
+    return builder.as_markup()
+
+
+def generations_filter_keyboard(current_filter: str = "last20"):
+    """Create keyboard for generations filter."""
+    builder = InlineKeyboardBuilder()
+    
+    filters = [
+        ("Последние 20", "last20"),
+        ("За сегодня", "today"),
+        ("За неделю", "week"),
+    ]
+    
+    buttons = []
+    for label, filter_val in filters:
+        text = f"• {label}" if filter_val == current_filter else label
+        buttons.append(
+            InlineKeyboardButton(
+                text=text,
+                callback_data=f"admin:gen_filter:{filter_val}",
+            )
+        )
+    
+    builder.row(*buttons)
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад",
+            callback_data="admin:back",
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def errors_filter_keyboard(current_filter: str = "24h"):
+    """Create keyboard for errors filter."""
+    builder = InlineKeyboardBuilder()
+    
+    builder.row(
+        InlineKeyboardButton(
+            text="• За 24 часа" if current_filter == "24h" else "За 24 часа",
+            callback_data="admin:err_filter:24h",
+        ),
+        InlineKeyboardButton(
+            text="• За неделю" if current_filter == "week" else "За неделю",
+            callback_data="admin:err_filter:week",
+        ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад",
+            callback_data="admin:back",
+        )
+    )
+    
+    return builder.as_markup()
+
+
+def back_to_admin_keyboard():
+    """Create simple back button."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад в админ-панель",
+            callback_data="admin:back",
+        )
+    )
     return builder.as_markup()
 
 
@@ -215,7 +319,7 @@ async def admin_refresh_callback(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "admin:top_users")
 async def admin_top_users_callback(callback: CallbackQuery) -> None:
-    """Show top users by task count."""
+    """Show top users by task count with token information."""
     if not config.is_admin(callback.from_user.id):
         await callback.answer("❌ Нет доступа")
         return
@@ -229,11 +333,21 @@ async def admin_top_users_callback(callback: CallbackQuery) -> None:
     if not top_users:
         text = "👥 <b>Топ пользователей</b>\n\nНет данных"
     else:
-        users_text = "\n".join([
-            f"{i}. @{user.username or '—'} (<code>{user.telegram_id}</code>) — {user.task_count} задач"
-            for i, user in enumerate(top_users, 1)
-        ])
-        text = f"👥 <b>Топ 10 пользователей</b>\n\n{users_text}"
+        lines = ["👥 <b>Топ 10 пользователей</b>\n"]
+        
+        for i, user in enumerate(top_users, 1):
+            telegram_id, username, first_name, task_count, current_tokens, tokens_spent, tokens_purchased = user
+            
+            user_display = f"@{username}" if username else first_name or f"ID:{telegram_id}"
+            
+            line = (
+                f"{i}. {user_display} (<code>{telegram_id}</code>)\n"
+                f"   📊 Задач: {task_count} | 💰 Баланс: {current_tokens} 🪙\n"
+                f"   💸 Потрачено: {tokens_spent} | 🛒 Куплено: {tokens_purchased}"
+            )
+            lines.append(line)
+        
+        text = "\n\n".join(lines)
     
     builder = InlineKeyboardBuilder()
     builder.row(
@@ -554,6 +668,325 @@ async def toggle_subscription_command(message: Message) -> None:
         f"Канал: {config.subscription_channel or 'не задан'}\n\n"
         f"<i>Новые пользователи {'должны' if new_value else 'не должны'} подписаться на канал для получения токенов.</i>"
     )
+
+
+# ============== NEW ADMIN HANDLERS ==============
+
+@router.callback_query(F.data == "admin:generations")
+async def admin_generations_callback(callback: CallbackQuery) -> None:
+    """Show recent generations with filter."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    await _send_generations(callback, "last20")
+
+
+@router.callback_query(F.data.startswith("admin:gen_filter:"))
+async def admin_generations_filter_callback(callback: CallbackQuery) -> None:
+    """Handle generations filter change."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    filter_val = callback.data.split(":")[-1]
+    await _send_generations(callback, filter_val)
+
+
+async def _send_generations(callback_or_message, filter_val: str = "last20") -> None:
+    """Send generations list."""
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        stats_repo = StatsRepository(session)
+        
+        if filter_val == "last20":
+            generations = await stats_repo.get_recent_generations(limit=20, period="all")
+            title = "📋 Последние 20 генераций"
+        elif filter_val == "today":
+            generations = await stats_repo.get_recent_generations(limit=100, period="today")
+            title = "📋 Генерации за сегодня"
+        else:  # week
+            generations = await stats_repo.get_recent_generations(limit=100, period="week")
+            title = "📋 Генерации за неделю"
+    
+    if not generations:
+        text = f"{title}\n\n❌ Нет данных"
+    else:
+        lines = [f"{title}\n"]
+        
+        for gen in generations:
+            task_id, username, first_name, telegram_id, model, quality, task_type, status, created_at, prompt, error = gen
+            
+            # Status emoji
+            status_emoji = "✅" if status == "completed" else "❌" if status == "failed" else "⏳"
+            
+            # User display
+            user_display = f"@{username}" if username else first_name or f"ID:{telegram_id}"
+            
+            # Prompt preview
+            prompt_preview = prompt[:50] + "..." if len(prompt) > 50 else prompt
+            
+            # Time
+            time_str = created_at.strftime("%H:%M")
+            
+            # Model short name
+            model_short = "GPT" if "gpt" in model.lower() else "SD"
+            
+            # Type
+            type_emoji = "🎨" if task_type == "generate" else "🪄"
+            
+            line = f"{status_emoji} {type_emoji} {user_display} | {model_short} {quality} | {time_str}\n   <code>{prompt_preview}</code>"
+            
+            if error:
+                error_preview = error[:40] + "..." if len(error) > 40 else error
+                line += f"\n   ⚠️ <i>{error_preview}</i>"
+            
+            lines.append(line)
+        
+        text = "\n\n".join(lines)
+        
+        # Add summary
+        total = len(generations)
+        completed = sum(1 for g in generations if g[7] == "completed")
+        failed = sum(1 for g in generations if g[7] == "failed")
+        text += f"\n\n📊 Всего: {total} | ✅ {completed} | ❌ {failed}"
+    
+    # Truncate if too long (Telegram limit 4096)
+    if len(text) > 4000:
+        text = text[:3900] + "\n\n... (обрезано, слишком много данных)"
+    
+    if isinstance(callback_or_message, CallbackQuery):
+        await callback_or_message.message.edit_text(
+            text=text,
+            reply_markup=generations_filter_keyboard(filter_val),
+        )
+        await callback_or_message.answer()
+    else:
+        await callback_or_message.answer(
+            text=text,
+            reply_markup=generations_filter_keyboard(filter_val),
+        )
+
+
+@router.callback_query(F.data == "admin:errors")
+async def admin_errors_callback(callback: CallbackQuery) -> None:
+    """Show error statistics."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    await _send_errors(callback, "24h")
+
+
+@router.callback_query(F.data.startswith("admin:err_filter:"))
+async def admin_errors_filter_callback(callback: CallbackQuery) -> None:
+    """Handle errors filter change."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    filter_val = callback.data.split(":")[-1]
+    await _send_errors(callback, filter_val)
+
+
+async def _send_errors(callback_or_message, period: str = "24h") -> None:
+    """Send error statistics."""
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        stats_repo = StatsRepository(session)
+        error_stats = await stats_repo.get_error_stats(period=period)
+    
+    period_text = "за 24 часа" if period == "24h" else "за неделю"
+    title = f"⚠️ Ошибки {period_text}"
+    
+    text = f"{title}\n\n"
+    text += f"<b>Всего ошибок:</b> {error_stats['total']}\n\n"
+    
+    if error_stats['recent']:
+        text += "<b>Последние ошибки:</b>\n\n"
+        
+        for err in error_stats['recent']:
+            task_id, username, model, error_msg, created_at = err
+            user_display = f"@{username}" if username else f"ID:{task_id}"
+            time_str = created_at.strftime("%d.%m %H:%M")
+            error_preview = error_msg[:60] + "..." if error_msg and len(error_msg) > 60 else error_msg or "Unknown error"
+            
+            text += f"• {time_str} | {user_display} | {model}\n"
+            text += f"  <code>{error_preview}</code>\n\n"
+    else:
+        text += "✅ Ошибок нет!"
+    
+    if isinstance(callback_or_message, CallbackQuery):
+        await callback_or_message.message.edit_text(
+            text=text,
+            reply_markup=errors_filter_keyboard(period),
+        )
+        await callback_or_message.answer()
+    else:
+        await callback_or_message.answer(
+            text=text,
+            reply_markup=errors_filter_keyboard(period),
+        )
+
+
+@router.callback_query(F.data == "admin:finance")
+async def admin_finance_callback(callback: CallbackQuery) -> None:
+    """Show financial statistics."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        stats_repo = StatsRepository(session)
+        finance = await stats_repo.get_financial_stats(days=30)
+    
+    text = (
+        f"💰 <b>Финансы за 30 дней</b>\n\n"
+        f"<b>Токены:</b>\n"
+        f"  • Выдано: {finance['tokens_given']} 🪙\n"
+        f"  • Потрачено: {finance['tokens_spent']} 🪙\n"
+        f"  • Куплено: {finance['tokens_purchased']} 🪙\n\n"
+        f"<b>Покупки:</b>\n"
+        f"  • Количество: {finance['purchases_count']}\n"
+        f"  • Средний чек: {finance['avg_purchase']} 🪙\n"
+        f"  • Конверсия: {finance['conversion_rate']:.1f}%\n\n"
+        f"<b>Пользователи:</b>\n"
+        f"  • Новых: {finance['new_users']}"
+    )
+    
+    await callback.message.edit_text(
+        text=text,
+        reply_markup=back_to_admin_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:live")
+async def admin_live_callback(callback: CallbackQuery) -> None:
+    """Show live monitoring."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        stats_repo = StatsRepository(session)
+        live = await stats_repo.get_live_stats()
+    
+    text = (
+        f"🔴 <b>Live мониторинг</b>\n\n"
+        f"<b>Активность:</b>\n"
+        f"  • Активных пользователей (1ч): {live['active_users']}\n"
+        f"  • Задач в очереди: {live['tasks_in_queue']}\n\n"
+        f"<b>Производительность:</b>\n"
+        f"  • Средняя скорость: {live['avg_generation_time']} сек\n\n"
+        f"<i>Обновлено: {datetime.now().strftime('%H:%M:%S')}</i>"
+    )
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="🔄 Обновить",
+            callback_data="admin:live",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="◀️ Назад",
+            callback_data="admin:back",
+        )
+    )
+    
+    await callback.message.edit_text(
+        text=text,
+        reply_markup=builder.as_markup(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin:export")
+async def admin_export_callback(callback: CallbackQuery) -> None:
+    """Handle export request - export recent generations to CSV."""
+    if not config.is_admin(callback.from_user.id):
+        await callback.answer("❌ Нет доступа")
+        return
+    
+    await callback.answer("📥 Генерирую CSV файл...")
+    
+    session_maker = get_session_maker()
+    
+    async with session_maker() as session:
+        stats_repo = StatsRepository(session)
+        generations = await stats_repo.get_recent_generations(limit=100, period="all")
+    
+    if not generations:
+        await callback.message.answer("❌ Нет данных для экспорта")
+        return
+    
+    # Create CSV content
+    import csv
+    import io
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow([
+        "ID",
+        "Username",
+        "First Name",
+        "Telegram ID",
+        "Model",
+        "Quality",
+        "Type",
+        "Status",
+        "Created At",
+        "Prompt",
+        "Error"
+    ])
+    
+    # Data rows
+    for gen in generations:
+        task_id, username, first_name, telegram_id, model, quality, task_type, status, created_at, prompt, error = gen
+        writer.writerow([
+            task_id,
+            username or "",
+            first_name or "",
+            telegram_id,
+            model,
+            quality,
+            task_type,
+            status,
+            created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            prompt,
+            error or ""
+        ])
+    
+    # Get CSV content
+    csv_content = output.getvalue()
+    output.close()
+    
+    # Send as document
+    from aiogram.types import BufferedInputFile
+    from datetime import datetime
+    
+    filename = f"generations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    document = BufferedInputFile(
+        csv_content.encode('utf-8-sig'),  # UTF-8 with BOM for Excel compatibility
+        filename=filename
+    )
+    
+    await callback.message.answer_document(
+        document=document,
+        caption=f"📊 Экспорт последних {len(generations)} генераций"
+    )
+    
+    await callback.answer("✅ Файл отправлен")
 
 
 @router.callback_query(F.data == "admin:togglesub")

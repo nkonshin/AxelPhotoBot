@@ -410,16 +410,57 @@ class StatsRepository:
         return result.scalar() or 0
     
     async def get_top_users(self, limit: int = 10) -> List[tuple]:
-        """Get top users by number of tasks."""
+        """
+        Get top users by number of tasks with token information.
+        
+        Returns:
+            List of tuples: (telegram_id, username, first_name, task_count, current_tokens, tokens_spent, tokens_purchased)
+        """
+        from bot.db.models import Payment
+        
+        # Subquery for tokens purchased
+        tokens_purchased_subquery = (
+            select(
+                Payment.user_id,
+                func.coalesce(func.sum(Payment.tokens_amount), 0).label("tokens_purchased")
+            )
+            .where(Payment.status == "succeeded")
+            .group_by(Payment.user_id)
+            .subquery()
+        )
+        
+        # Subquery for tokens spent
+        tokens_spent_subquery = (
+            select(
+                GenerationTask.user_id,
+                func.coalesce(func.sum(GenerationTask.tokens_spent), 0).label("tokens_spent")
+            )
+            .group_by(GenerationTask.user_id)
+            .subquery()
+        )
+        
         result = await self.session.execute(
             select(
                 User.telegram_id,
                 User.username,
                 User.first_name,
-                func.count(GenerationTask.id).label("task_count")
+                func.count(GenerationTask.id).label("task_count"),
+                User.tokens.label("current_tokens"),
+                func.coalesce(tokens_spent_subquery.c.tokens_spent, 0).label("tokens_spent"),
+                func.coalesce(tokens_purchased_subquery.c.tokens_purchased, 0).label("tokens_purchased")
             )
             .join(GenerationTask, User.id == GenerationTask.user_id)
-            .group_by(User.id)
+            .outerjoin(tokens_spent_subquery, User.id == tokens_spent_subquery.c.user_id)
+            .outerjoin(tokens_purchased_subquery, User.id == tokens_purchased_subquery.c.user_id)
+            .group_by(
+                User.id,
+                User.telegram_id,
+                User.username,
+                User.first_name,
+                User.tokens,
+                tokens_spent_subquery.c.tokens_spent,
+                tokens_purchased_subquery.c.tokens_purchased
+            )
             .order_by(desc("task_count"))
             .limit(limit)
         )
@@ -446,6 +487,195 @@ class StatsRepository:
             "users_today": await self.get_users_today(),
             "active_users_today": await self.get_active_users_today(),
             "model_usage": await self.get_model_usage(),
+        }
+    
+    async def get_recent_generations(self, limit: int = 20, period: str = "all") -> List[tuple]:
+        """
+        Get recent generations with user info.
+        
+        Args:
+            limit: Maximum number of results
+            period: Filter period - "all", "today", "week"
+        
+        Returns:
+            List of tuples: (task_id, username, model, quality, type, status, created_at, prompt, error_message)
+        """
+        from datetime import timedelta
+        
+        query = select(
+            GenerationTask.id,
+            User.username,
+            User.first_name,
+            User.telegram_id,
+            GenerationTask.model,
+            GenerationTask.image_quality,
+            GenerationTask.task_type,
+            GenerationTask.status,
+            GenerationTask.created_at,
+            GenerationTask.prompt,
+            GenerationTask.error_message,
+        ).join(User, GenerationTask.user_id == User.id)
+        
+        # Apply period filter
+        if period == "today":
+            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            query = query.where(GenerationTask.created_at >= today)
+        elif period == "week":
+            week_ago = datetime.utcnow() - timedelta(days=7)
+            query = query.where(GenerationTask.created_at >= week_ago)
+        
+        query = query.order_by(desc(GenerationTask.created_at)).limit(limit)
+        
+        result = await self.session.execute(query)
+        return result.all()
+    
+    async def get_error_stats(self, period: str = "24h") -> dict:
+        """
+        Get error statistics.
+        
+        Args:
+            period: "24h" or "week"
+        
+        Returns:
+            Dict with error counts and recent errors
+        """
+        from datetime import timedelta
+        
+        if period == "24h":
+            time_ago = datetime.utcnow() - timedelta(hours=24)
+        else:  # week
+            time_ago = datetime.utcnow() - timedelta(days=7)
+        
+        # Total errors
+        total_errors_result = await self.session.execute(
+            select(func.count(GenerationTask.id))
+            .where(GenerationTask.status == "failed")
+            .where(GenerationTask.created_at >= time_ago)
+        )
+        total_errors = total_errors_result.scalar() or 0
+        
+        # Recent errors with details
+        recent_errors_result = await self.session.execute(
+            select(
+                GenerationTask.id,
+                User.username,
+                GenerationTask.model,
+                GenerationTask.error_message,
+                GenerationTask.created_at,
+            )
+            .join(User, GenerationTask.user_id == User.id)
+            .where(GenerationTask.status == "failed")
+            .where(GenerationTask.created_at >= time_ago)
+            .order_by(desc(GenerationTask.created_at))
+            .limit(10)
+        )
+        recent_errors = recent_errors_result.all()
+        
+        return {
+            "total": total_errors,
+            "recent": recent_errors,
+            "period": period,
+        }
+    
+    async def get_financial_stats(self, days: int = 30) -> dict:
+        """
+        Get financial statistics.
+        
+        Args:
+            days: Number of days to look back
+        
+        Returns:
+            Dict with token statistics
+        """
+        from datetime import timedelta
+        
+        time_ago = datetime.utcnow() - timedelta(days=days)
+        
+        # Total tokens given (initial + referral bonuses)
+        total_users_result = await self.session.execute(
+            select(func.count(User.id))
+            .where(User.created_at >= time_ago)
+        )
+        new_users = total_users_result.scalar() or 0
+        tokens_given = new_users * config.initial_tokens
+        
+        # Tokens spent
+        tokens_spent_result = await self.session.execute(
+            select(func.sum(GenerationTask.tokens_spent))
+            .where(GenerationTask.created_at >= time_ago)
+        )
+        tokens_spent = tokens_spent_result.scalar() or 0
+        
+        # Tokens purchased (from payments)
+        from bot.db.models import Payment
+        tokens_purchased_result = await self.session.execute(
+            select(func.sum(Payment.tokens_amount))
+            .where(Payment.status == "succeeded")
+            .where(Payment.created_at >= time_ago)
+        )
+        tokens_purchased = tokens_purchased_result.scalar() or 0
+        
+        # Number of purchases
+        purchases_count_result = await self.session.execute(
+            select(func.count(Payment.id))
+            .where(Payment.status == "succeeded")
+            .where(Payment.created_at >= time_ago)
+        )
+        purchases_count = purchases_count_result.scalar() or 0
+        
+        # Average purchase
+        avg_purchase = tokens_purchased // purchases_count if purchases_count > 0 else 0
+        
+        # Conversion rate
+        conversion_rate = (purchases_count / new_users * 100) if new_users > 0 else 0
+        
+        return {
+            "tokens_given": tokens_given,
+            "tokens_spent": tokens_spent,
+            "tokens_purchased": tokens_purchased,
+            "purchases_count": purchases_count,
+            "avg_purchase": avg_purchase,
+            "conversion_rate": conversion_rate,
+            "new_users": new_users,
+            "period_days": days,
+        }
+    
+    async def get_live_stats(self) -> dict:
+        """Get live monitoring statistics."""
+        from datetime import timedelta
+        
+        # Active users in last hour
+        hour_ago = datetime.utcnow() - timedelta(hours=1)
+        active_users_result = await self.session.execute(
+            select(func.count(func.distinct(GenerationTask.user_id)))
+            .where(GenerationTask.created_at >= hour_ago)
+        )
+        active_users = active_users_result.scalar() or 0
+        
+        # Tasks in queue (pending/processing)
+        queue_result = await self.session.execute(
+            select(func.count(GenerationTask.id))
+            .where(GenerationTask.status.in_(["pending", "processing"]))
+        )
+        tasks_in_queue = queue_result.scalar() or 0
+        
+        # Average generation time (last 100 completed tasks)
+        avg_time_result = await self.session.execute(
+            select(
+                func.avg(
+                    func.extract('epoch', GenerationTask.updated_at - GenerationTask.created_at)
+                )
+            )
+            .where(GenerationTask.status == "completed")
+            .order_by(desc(GenerationTask.created_at))
+            .limit(100)
+        )
+        avg_time = avg_time_result.scalar() or 0
+        
+        return {
+            "active_users": active_users,
+            "tasks_in_queue": tasks_in_queue,
+            "avg_generation_time": round(avg_time, 1) if avg_time else 0,
         }
 
 
