@@ -833,7 +833,6 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
     
     # Start progress animation immediately
     from bot.utils.progress_animation import ProgressAnimator
-    from bot.config import config
     
     progress_animator = ProgressAnimator(
         telegram_id=callback.from_user.id,
@@ -934,7 +933,6 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
 
     # Start progress animation immediately
     from bot.utils.progress_animation import ProgressAnimator
-    from bot.config import config
     
     progress_animator = ProgressAnimator(
         telegram_id=callback.from_user.id,

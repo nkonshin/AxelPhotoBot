@@ -594,7 +594,6 @@ async def _execute_template_edit(
     
     # Start progress animation immediately
     from bot.utils.progress_animation import ProgressAnimator
-    from bot.config import config
     
     progress_animator = ProgressAnimator(
         telegram_id=callback.from_user.id,

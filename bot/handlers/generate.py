@@ -370,7 +370,6 @@ async def confirm_generation(callback: CallbackQuery, state: FSMContext) -> None
     
     # Start progress animation immediately
     from bot.utils.progress_animation import ProgressAnimator
-    from bot.config import config
     
     progress_animator = ProgressAnimator(
         telegram_id=callback.from_user.id,
@@ -457,7 +456,6 @@ async def confirm_generation_expensive(callback: CallbackQuery, state: FSMContex
 
     # Start progress animation immediately
     from bot.utils.progress_animation import ProgressAnimator
-    from bot.config import config
     
     progress_animator = ProgressAnimator(
         telegram_id=callback.from_user.id,
