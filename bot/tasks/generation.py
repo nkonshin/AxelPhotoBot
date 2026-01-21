@@ -360,6 +360,12 @@ async def _send_result_to_user(
         db_time = time.time() - start_time
         logger.info(f"Task {task.id}: DB query took {db_time:.2f}s")
         
+        # Stop progress animation by deleting it
+        # We need to find the message with animation and delete it
+        # Since we don't have message_id, we'll use a helper function
+        from bot.utils.progress_animation import delete_progress_animation_for_user
+        await delete_progress_animation_for_user(telegram_id, config.bot_token)
+        
         # Send image to user
         task_type_emoji = "🎨" if task.task_type == "generate" else "🪄"
         task_type_text = "Картинка создана" if task.task_type == "generate" else "Фото отредактировано"
