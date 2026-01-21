@@ -478,8 +478,8 @@ async def _send_result_to_user(
         actual_resolution = get_actual_resolution(task.model, task.image_quality, task.image_size)
         
         # Telegram caption limit is 1024 characters
-        # Reserve space for other text (~200 chars), leaving ~800 for prompt
-        max_prompt_length = 800
+        # Reserve space for other text (~300 chars), leaving ~700 for prompt
+        max_prompt_length = 700
         prompt_text = task.prompt if len(task.prompt) <= max_prompt_length else task.prompt[:max_prompt_length] + "..."
         
         caption = (
@@ -487,7 +487,11 @@ async def _send_result_to_user(
             f"<blockquote expandable>{prompt_text}</blockquote>\n\n"
             f"⚙️ {quality_label} • {actual_resolution}\n"
             f"💰 Списано: {task.tokens_spent} 🪙\n\n"
-            f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>"
+            f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>\n\n"
+            f"❓ <b>Не понравился результат?</b>\n"
+            f"• Попробуйте нашу новую модель в главном меню!\n"
+            f"• Измените фото или добавьте другие\n"
+            f"• Измените промпт или попробуйте один из шаблонов"
         )
 
         # Generate filename based on model

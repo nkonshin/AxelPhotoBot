@@ -101,7 +101,7 @@ def load_config() -> Config:
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
         ark_api_key=os.getenv("ARK_API_KEY", ""),
-        initial_tokens=int(os.getenv("INITIAL_TOKENS", "7")),
+        initial_tokens=int(os.getenv("INITIAL_TOKENS", "10")),
 
         log_level=os.getenv("LOG_LEVEL", "INFO"),
 
