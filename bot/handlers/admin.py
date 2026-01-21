@@ -102,7 +102,7 @@ def admin_menu_keyboard():
     # Row 2: Generations and errors
     builder.row(
         InlineKeyboardButton(
-            text="� Последние генерации",
+            text="Последние генерации",
             callback_data="admin:generations",
         ),
         InlineKeyboardButton(
@@ -114,11 +114,11 @@ def admin_menu_keyboard():
     # Row 3: Users and models
     builder.row(
         InlineKeyboardButton(
-            text="� Топ пользователей",
+            text="Топ пользователей",
             callback_data="admin:top_users",
         ),
         InlineKeyboardButton(
-            text="� Модели",
+            text="Модели",
             callback_data="admin:model_usage",
         ),
     )
