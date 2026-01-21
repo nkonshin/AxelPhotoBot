@@ -102,7 +102,7 @@ async def _process_generation_task_async(task_id: int) -> bool:
     logger.info(f"Processing generation task {task_id}")
     
     session_maker = get_session_maker()
-    animation_message_id = None
+    progress_animator = None
     telegram_id = None
     
     async with session_maker() as session:
@@ -128,9 +128,16 @@ async def _process_generation_task_async(task_id: int) -> bool:
         await task_repo.update_status(task_id, status="processing")
         logger.info(f"Task {task_id} status updated to processing")
         
-        # Send animation message
+        # Start animated progress
         if telegram_id:
-            animation_message_id = await _send_animation_message(telegram_id)
+            from bot.utils.progress_animation import ProgressAnimator
+            progress_animator = ProgressAnimator(
+                telegram_id=telegram_id,
+                bot_token=config.bot_token,
+                task_type=task.task_type,
+                total_steps=5,
+            )
+            await progress_animator.start()
         
         try:
             # Initialize image provider based on model
@@ -146,25 +153,6 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 image_provider = OpenAIImageProvider(
                     api_key=config.openai_api_key,
                     model=task.model or "gpt-image-1",
-                )
-            
-            # Update progress: preparing request
-            if animation_message_id and telegram_id:
-                await _update_progress_message(
-                    telegram_id,
-                    animation_message_id,
-                    "⏳ <b>Генерация началась...</b>\n\n🎨 Отправляю запрос на сервер..."
-                )
-            
-            # Small delay to show progress
-            await asyncio.sleep(1)
-            
-            # Update progress: generating
-            if animation_message_id and telegram_id:
-                await _update_progress_message(
-                    telegram_id,
-                    animation_message_id,
-                    "⏳ <b>Генерация в процессе...</b>\n\n✨ Создаю изображение...\n<i>Это может занять 30-60 секунд</i>"
                 )
             
             # Generate or edit based on task type
@@ -191,17 +179,9 @@ async def _process_generation_task_async(task_id: int) -> bool:
             else:
                 raise ValueError(f"Unknown task type: {task.task_type}")
             
-            # Update progress: finalizing
-            if animation_message_id and telegram_id:
-                await _update_progress_message(
-                    telegram_id,
-                    animation_message_id,
-                    "⏳ <b>Почти готово...</b>\n\n🎉 Отправляю результат..."
-                )
-            
-            # Delete animation message
-            if animation_message_id and telegram_id:
-                await _delete_animation_message(telegram_id, animation_message_id)
+            # Stop animation
+            if progress_animator:
+                await progress_animator.stop()
             
             if result.success and (result.image_url or result.image_base64):
                 # Calculate API tokens for admin tracking
@@ -244,9 +224,9 @@ async def _process_generation_task_async(task_id: int) -> bool:
                 raise GenerationError(error_msg)
         
         except ModerationError as e:
-            # Delete animation message on error
-            if animation_message_id and telegram_id:
-                await _delete_animation_message(telegram_id, animation_message_id)
+            # Stop animation on error
+            if progress_animator:
+                await progress_animator.stop()
             
             error_msg = str(e)
             logger.warning(f"Task {task_id} blocked by moderation: {error_msg}")
@@ -274,9 +254,9 @@ async def _process_generation_task_async(task_id: int) -> bool:
             return False
         
         except Exception as e:
-            # Delete animation message on error
-            if animation_message_id and telegram_id:
-                await _delete_animation_message(telegram_id, animation_message_id)
+            # Stop animation on error
+            if progress_animator:
+                await progress_animator.stop()
             
             # Handle failure
             error_msg = str(e)
@@ -319,77 +299,6 @@ async def _process_generation_task_async(task_id: int) -> bool:
                     f"re-queuing..."
                 )
                 raise  # Re-raise for RQ retry mechanism
-
-
-async def _send_animation_message(telegram_id: int) -> Optional[int]:
-    """
-    Send animation message to user while generating.
-    
-    Returns:
-        Message ID of the animation message, or None if failed
-    """
-    try:
-        from aiogram import Bot
-        
-        bot = Bot(token=config.bot_token)
-        
-        message = await bot.send_message(
-            chat_id=telegram_id,
-            text="⏳ <b>Генерация началась...</b>\n\n🎨 Создаю изображение...",
-            parse_mode="HTML",
-        )
-        
-        await bot.session.close()
-        
-        return message.message_id
-    
-    except Exception as e:
-        logger.error(f"Failed to send animation message: {e}")
-        return None
-
-
-async def _update_progress_message(telegram_id: int, message_id: int, text: str) -> None:
-    """
-    Update progress message during generation.
-    
-    Args:
-        telegram_id: User's Telegram ID
-        message_id: Message ID to update
-        text: New text for the message
-    """
-    try:
-        from aiogram import Bot
-        
-        bot = Bot(token=config.bot_token)
-        
-        await bot.edit_message_text(
-            chat_id=telegram_id,
-            message_id=message_id,
-            text=text,
-            parse_mode="HTML",
-        )
-        
-        await bot.session.close()
-    
-    except Exception as e:
-        logger.error(f"Failed to update progress message: {e}")
-
-
-async def _delete_animation_message(telegram_id: int, message_id: int) -> None:
-    """
-    Delete the animation message after generation is complete.
-    """
-    try:
-        from aiogram import Bot
-        
-        bot = Bot(token=config.bot_token)
-        
-        await bot.delete_message(chat_id=telegram_id, message_id=message_id)
-        
-        await bot.session.close()
-    
-    except Exception as e:
-        logger.error(f"Failed to delete animation message: {e}")
 
 
 class GenerationError(Exception):
@@ -639,8 +548,8 @@ async def _send_moderation_notification(task: GenerationTask) -> None:
             f"К сожалению, ваш запрос не прошёл проверку безопасности OpenAI.\n\n"
             f"Система сочла некоторые образы или слова недопустимыми (sexual content).\n\n"
             f"Токены ({task.tokens_spent}) возвращены на ваш баланс.\n\n"
-            f"💡 <i>Попробуйте изменить описание и избегать запрещённого контента.</i>"
-            f"<i>Или попробуйте переключить модель в меню бота (например SeeDream 4.5 - у нее более мягкие фильтры).</i>"
+            f"💡 <i>Попробуйте изменить описание и избегать запрещённого контента.</i>\n\n"
+            f"<i>Или попробуйте переключить модель в меню бота (например на SeeDream 4.5 - у нее более мягкие фильтры).</i>"
         )
         
         await bot.send_message(chat_id=telegram_id, text=message, parse_mode="HTML")
