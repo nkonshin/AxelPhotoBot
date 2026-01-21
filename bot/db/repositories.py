@@ -660,15 +660,19 @@ class StatsRepository:
         tasks_in_queue = queue_result.scalar() or 0
         
         # Average generation time (last 100 completed tasks)
-        avg_time_result = await self.session.execute(
+        # Use subquery to get last 100 tasks first, then calculate average
+        subquery = (
             select(
-                func.avg(
-                    func.extract('epoch', GenerationTask.updated_at - GenerationTask.created_at)
-                )
+                func.extract('epoch', GenerationTask.updated_at - GenerationTask.created_at).label('duration')
             )
             .where(GenerationTask.status == "completed")
             .order_by(desc(GenerationTask.created_at))
             .limit(100)
+            .subquery()
+        )
+        
+        avg_time_result = await self.session.execute(
+            select(func.avg(subquery.c.duration))
         )
         avg_time = avg_time_result.scalar() or 0
         
