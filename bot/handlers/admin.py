@@ -878,13 +878,24 @@ async def admin_live_callback(callback: CallbackQuery) -> None:
         stats_repo = StatsRepository(session)
         live = await stats_repo.get_live_stats()
     
+    # Build performance text
+    if live['completed_count'] > 0:
+        perf_text = (
+            f"  • Средняя: {live['avg_generation_time']} сек\n"
+            f"  • Самая быстрая: {live['min_generation_time']} сек\n"
+            f"  • Самая долгая: {live['max_generation_time']} сек\n"
+            f"  • Выборка: {live['completed_count']} последних"
+        )
+    else:
+        perf_text = "  • Нет данных"
+    
     text = (
         f"🔴 <b>Live мониторинг</b>\n\n"
         f"<b>Активность:</b>\n"
         f"  • Активных пользователей (1ч): {live['active_users']}\n"
         f"  • Задач в очереди: {live['tasks_in_queue']}\n\n"
-        f"<b>Производительность:</b>\n"
-        f"  • Средняя скорость: {live['avg_generation_time']} сек\n\n"
+        f"<b>Производительность генераций:</b>\n"
+        f"{perf_text}\n\n"
         f"<i>Обновлено: {datetime.now().strftime('%H:%M:%S')}</i>"
     )
     

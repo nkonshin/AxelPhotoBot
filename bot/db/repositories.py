@@ -652,35 +652,45 @@ class StatsRepository:
         )
         active_users = active_users_result.scalar() or 0
         
-        # Tasks in queue (pending/processing)
+        # Tasks in queue (pending/processing) - only recent ones (last 10 minutes)
+        ten_minutes_ago = datetime.utcnow() - timedelta(minutes=10)
         queue_result = await self.session.execute(
             select(func.count(GenerationTask.id))
             .where(GenerationTask.status.in_(["pending", "processing"]))
+            .where(GenerationTask.created_at >= ten_minutes_ago)
         )
         tasks_in_queue = queue_result.scalar() or 0
         
-        # Average generation time (last 100 completed tasks)
-        # Use subquery to get last 100 tasks first, then calculate average
-        subquery = (
+        # Get last 20 completed tasks with their durations
+        recent_tasks_result = await self.session.execute(
             select(
                 func.extract('epoch', GenerationTask.updated_at - GenerationTask.created_at).label('duration')
             )
             .where(GenerationTask.status == "completed")
+            .where(GenerationTask.updated_at.isnot(None))
             .order_by(desc(GenerationTask.created_at))
-            .limit(100)
-            .subquery()
+            .limit(20)
         )
+        durations = [row[0] for row in recent_tasks_result.all() if row[0] is not None and row[0] > 0]
         
-        avg_time_result = await self.session.execute(
-            select(func.avg(subquery.c.duration))
-        )
-        avg_time = avg_time_result.scalar() or 0
+        if durations:
+            avg_time = sum(durations) / len(durations)
+            min_time = min(durations)
+            max_time = max(durations)
+        else:
+            avg_time = 0
+            min_time = 0
+            max_time = 0
         
         return {
             "active_users": active_users,
             "tasks_in_queue": tasks_in_queue,
             "avg_generation_time": round(avg_time, 1) if avg_time else 0,
+            "min_generation_time": round(min_time, 1) if min_time else 0,
+            "max_generation_time": round(max_time, 1) if max_time else 0,
+            "completed_count": len(durations),
         }
+
 
 
 class PaymentRepository:

@@ -9,6 +9,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-botuser}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-botpassword}
       POSTGRES_DB: ${POSTGRES_DB:-telegram_bot}
+      TZ: Asia/Yekaterinburg
+      PGTZ: Asia/Yekaterinburg
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -43,6 +45,7 @@ services:
       target: production
     container_name: telegram_bot_app
     environment:
+      TZ: Asia/Yekaterinburg
       BOT_TOKEN: ${BOT_TOKEN}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botuser}:${POSTGRES_PASSWORD:-botpassword}@postgres:5432/${POSTGRES_DB:-telegram_bot}
       REDIS_URL: redis://redis:6379/0
@@ -105,6 +108,7 @@ services:
     deploy:
       replicas: 4  # 4 воркера для параллельной обработки задач
     environment:
+      TZ: Asia/Yekaterinburg
       BOT_TOKEN: ${BOT_TOKEN}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-botuser}:${POSTGRES_PASSWORD:-botpassword}@postgres:5432/${POSTGRES_DB:-telegram_bot}
       REDIS_URL: redis://redis:6379/0
