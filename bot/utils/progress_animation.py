@@ -123,8 +123,8 @@ class ProgressAnimator:
         """Main animation loop that updates progress periodically."""
         try:
             while self.is_running:
-                # Random delay between 7-12 seconds
-                delay = random.uniform(7, 12)
+                # Random delay between 5-10 seconds
+                delay = random.uniform(5, 10)
                 await asyncio.sleep(delay)
                 
                 if not self.is_running:
