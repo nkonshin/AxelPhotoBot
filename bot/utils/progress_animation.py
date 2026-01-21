@@ -150,7 +150,19 @@ class ProgressAnimator:
     async def _animation_loop(self) -> None:
         """Main animation loop that updates progress periodically."""
         try:
+            import redis.asyncio as redis
+            
+            redis_client = redis.from_url("redis://redis:6379/0")
+            stop_flag_key = f"progress_animation_stop:{self.telegram_id}"
+            
             while self.is_running:
+                # Check if stop flag is set
+                stop_flag = await redis_client.get(stop_flag_key)
+                if stop_flag:
+                    logger.info(f"Stop flag detected for user {self.telegram_id}, terminating animation")
+                    self.is_running = False
+                    break
+                
                 # Random delay between 7-12 seconds
                 delay = random.uniform(7, 12)
                 await asyncio.sleep(delay)
@@ -158,8 +170,17 @@ class ProgressAnimator:
                 if not self.is_running:
                     break
                 
+                # Check stop flag again after sleep
+                stop_flag = await redis_client.get(stop_flag_key)
+                if stop_flag:
+                    logger.info(f"Stop flag detected for user {self.telegram_id}, terminating animation")
+                    self.is_running = False
+                    break
+                
                 # Update progress
                 await self._update_progress()
+            
+            await redis_client.close()
                 
         except asyncio.CancelledError:
             pass
@@ -288,6 +309,7 @@ async def stop_progress_animation(telegram_id: int, bot_token: str) -> None:
 async def delete_progress_animation_for_user(telegram_id: int, bot_token: str) -> None:
     """
     Delete progress animation message for a user using Redis to find message_id.
+    Also sets a stop flag to terminate the animation loop.
     
     Args:
         telegram_id: User's Telegram ID
@@ -300,6 +322,11 @@ async def delete_progress_animation_for_user(telegram_id: int, bot_token: str) -
         # Get message_id from Redis
         redis_client = redis.from_url("redis://redis:6379/0")
         message_id_key = f"progress_animation:{telegram_id}"
+        stop_flag_key = f"progress_animation_stop:{telegram_id}"
+        
+        # Set stop flag first to terminate animation loop
+        await redis_client.set(stop_flag_key, "1", ex=60)  # Expire in 1 minute
+        
         message_id = await redis_client.get(message_id_key)
         
         if message_id:
@@ -315,8 +342,9 @@ async def delete_progress_animation_for_user(telegram_id: int, bot_token: str) -
             finally:
                 await bot.session.close()
             
-            # Clean up Redis key
+            # Clean up Redis keys
             await redis_client.delete(message_id_key)
+            await redis_client.delete(stop_flag_key)
         
         await redis_client.close()
         
