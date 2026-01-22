@@ -448,6 +448,7 @@ async def _send_result_to_user(
         
         # Forward result to monitoring channel
         if config.monitoring_channel_id and sent:
+            logger.info(f"Attempting to forward result to monitoring channel {config.monitoring_channel_id}")
             try:
                 # Get user info
                 session_maker_mon = get_session_maker()
@@ -467,6 +468,8 @@ async def _send_result_to_user(
                             from_chat_id=telegram_id,
                             message_id=sent.message_id,
                         )
+                        
+                        logger.info(f"Forwarded result message {sent.message_id} to monitoring channel")
                         
                         # Send details message
                         user_display = f"@{user.username}" if user.username else user.first_name or f"ID:{user.telegram_id}"
@@ -492,9 +495,11 @@ async def _send_result_to_user(
                         )
                         
                         logger.info(f"Forwarded result to monitoring channel for task {task.id}")
+                    else:
+                        logger.warning(f"User {task.user_id} not found for monitoring")
                         
             except Exception as e:
-                logger.error(f"Failed to forward result to monitoring channel: {e}")
+                logger.error(f"Failed to forward result to monitoring channel: {e}", exc_info=True)
         
         await bot.session.close()
 
@@ -533,6 +538,10 @@ async def _send_failure_notification(task: GenerationTask, error_msg: str) -> No
             if telegram_id is None:
                 logger.error(f"User {task.user_id} not found for task {task.id}")
                 return
+        
+        # Stop progress animation
+        from bot.utils.progress_animation import delete_progress_animation_for_user
+        await delete_progress_animation_for_user(telegram_id, config.bot_token)
         
         # Send failure notification to user
         message = (
@@ -580,6 +589,10 @@ async def _send_moderation_notification(task: GenerationTask) -> None:
             if telegram_id is None:
                 logger.error(f"User {task.user_id} not found for task {task.id}")
                 return
+        
+        # Stop progress animation
+        from bot.utils.progress_animation import delete_progress_animation_for_user
+        await delete_progress_animation_for_user(telegram_id, config.bot_token)
         
         # Send moderation notification to user
         message = (

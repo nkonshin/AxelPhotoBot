@@ -601,11 +601,15 @@ async def _execute_template_edit(
     photo_message_ids = state_data.get("photo_message_ids", [])
     photo_chat_id = state_data.get("photo_chat_id")
     
+    logger.info(f"Monitoring check (template): channel_id={config.monitoring_channel_id}, photo_msgs={len(photo_message_ids)}, chat_id={photo_chat_id}")
+    
     if photo_message_ids and photo_chat_id and config.monitoring_channel_id:
         try:
             from aiogram import Bot
             
             bot = Bot(token=config.bot_token)
+            
+            logger.info(f"Forwarding {len(photo_message_ids)} photos to monitoring channel {config.monitoring_channel_id}")
             
             # Get user info for monitoring
             session_maker_mon = get_session_maker()
@@ -621,6 +625,7 @@ async def _execute_template_edit(
                             from_chat_id=photo_chat_id,
                             message_id=msg_id,
                         )
+                        logger.info(f"Forwarded message {msg_id} to monitoring channel")
                     
                     # Send info message
                     user_display = f"@{user_mon.username}" if user_mon.username else user_mon.first_name or f"ID:{user_mon.telegram_id}"
@@ -638,11 +643,13 @@ async def _execute_template_edit(
                         text=info_text,
                         parse_mode="HTML",
                     )
+                    
+                    logger.info(f"Sent monitoring info message for user {user_mon.telegram_id}")
             
             await bot.session.close()
             
         except Exception as e:
-            logger.error(f"Failed to forward photos to monitoring: {e}")
+            logger.error(f"Failed to forward photos to monitoring: {e}", exc_info=True)
     
     # Start progress animation immediately
     from bot.utils.progress_animation import ProgressAnimator

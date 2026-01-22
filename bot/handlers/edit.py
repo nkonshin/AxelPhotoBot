@@ -840,19 +840,15 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
     photo_message_ids = state_data.get("photo_message_ids", [])
     photo_chat_id = state_data.get("photo_chat_id")
     
+    logger.info(f"Monitoring check: channel_id={config.monitoring_channel_id}, photo_msgs={len(photo_message_ids)}, chat_id={photo_chat_id}")
+    
     if photo_message_ids and photo_chat_id and config.monitoring_channel_id:
         try:
             from aiogram import Bot
-            from bot.services.monitoring import forward_source_photos_to_monitoring
             
             bot = Bot(token=config.bot_token)
             
-            # Create Message objects for forwarding
-            messages = []
-            for msg_id in photo_message_ids:
-                # We need to create a minimal Message object with chat_id and message_id
-                # Actually, we can just forward by IDs directly in the monitoring service
-                pass
+            logger.info(f"Forwarding {len(photo_message_ids)} photos to monitoring channel {config.monitoring_channel_id}")
             
             # Get user info for monitoring
             session_maker_mon = get_session_maker()
@@ -868,6 +864,7 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
                             from_chat_id=photo_chat_id,
                             message_id=msg_id,
                         )
+                        logger.info(f"Forwarded message {msg_id} to monitoring channel")
                     
                     # Send info message
                     user_display = f"@{user_mon.username}" if user_mon.username else user_mon.first_name or f"ID:{user_mon.telegram_id}"
@@ -885,6 +882,8 @@ async def confirm_edit(callback: CallbackQuery, state: FSMContext) -> None:
                         text=info_text,
                         parse_mode="HTML",
                     )
+                    
+                    logger.info(f"Sent monitoring info message for user {user_mon.telegram_id}")
             
             await bot.session.close()
             
@@ -996,11 +995,15 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
     photo_message_ids = state_data.get("photo_message_ids", [])
     photo_chat_id = state_data.get("photo_chat_id")
     
+    logger.info(f"Monitoring check (expensive): channel_id={config.monitoring_channel_id}, photo_msgs={len(photo_message_ids)}, chat_id={photo_chat_id}")
+    
     if photo_message_ids and photo_chat_id and config.monitoring_channel_id:
         try:
             from aiogram import Bot
             
             bot = Bot(token=config.bot_token)
+            
+            logger.info(f"Forwarding {len(photo_message_ids)} photos to monitoring channel {config.monitoring_channel_id}")
             
             # Get user info for monitoring
             session_maker_mon = get_session_maker()
@@ -1016,6 +1019,7 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
                             from_chat_id=photo_chat_id,
                             message_id=msg_id,
                         )
+                        logger.info(f"Forwarded message {msg_id} to monitoring channel")
                     
                     # Send info message
                     user_display = f"@{user_mon.username}" if user_mon.username else user_mon.first_name or f"ID:{user_mon.telegram_id}"
@@ -1033,11 +1037,13 @@ async def confirm_edit_expensive(callback: CallbackQuery, state: FSMContext) -> 
                         text=info_text,
                         parse_mode="HTML",
                     )
+                    
+                    logger.info(f"Sent monitoring info message for user {user_mon.telegram_id}")
             
             await bot.session.close()
             
         except Exception as e:
-            logger.error(f"Failed to forward photos to monitoring: {e}")
+            logger.error(f"Failed to forward photos to monitoring: {e}", exc_info=True)
 
     # Start progress animation immediately
     from bot.utils.progress_animation import ProgressAnimator
