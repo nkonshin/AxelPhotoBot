@@ -375,13 +375,10 @@ async def _send_result_to_user(
         actual_resolution = get_actual_resolution(task.model, task.image_quality, task.image_size)
         
         # Telegram caption limit is 1024 characters
-        # Reserve space for other text (~300 chars), leaving ~700 for prompt
-        max_prompt_length = 700
-        prompt_text = task.prompt if len(task.prompt) <= max_prompt_length else task.prompt[:max_prompt_length] + "..."
-        
-        caption = (
+        # Build static parts first to calculate remaining space for prompt
+        static_text = (
             f"{task_type_emoji} <b>{task_type_text}!</b>\n\n"
-            f"<blockquote expandable>{prompt_text}</blockquote>\n\n"
+            f"<blockquote expandable>PROMPT_PLACEHOLDER</blockquote>\n\n"
             f"⚙️ Качество: {quality_label} \n"
             f"💰 Списано: {task.tokens_spent} 🪙\n\n"
             f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>\n\n"
@@ -391,6 +388,22 @@ async def _send_result_to_user(
             f"• Измените промпт или попробуйте один из шаблонов\n\n"
             f"Сделано в @AxelPhotobot"
         )
+        
+        # Calculate max prompt length: 1000 chars (safe margin) - static text length + placeholder length
+        telegram_limit = 1000  # Safe margin below 1024
+        placeholder_length = len("PROMPT_PLACEHOLDER")
+        static_length = len(static_text) - placeholder_length
+        max_prompt_length = telegram_limit - static_length
+        
+        # Ensure we have at least 100 chars for prompt
+        if max_prompt_length < 100:
+            max_prompt_length = 100
+        
+        # Truncate prompt if needed
+        prompt_text = task.prompt if len(task.prompt) <= max_prompt_length else task.prompt[:max_prompt_length] + "..."
+        
+        # Build final caption
+        caption = static_text.replace("PROMPT_PLACEHOLDER", prompt_text)
 
         # Generate filename based on model
         if task.model and task.model.startswith("seedream"):
@@ -398,47 +411,76 @@ async def _send_result_to_user(
         else:
             filename = "GPT_Image.png"
 
-        if is_base64:
-            # Decode base64 and send as document
-            decode_start = time.time()
-            logger.info(f"Task {task.id}: Decoding base64 image, size: {len(image_data)} chars")
-            image_bytes = base64.b64decode(image_data)
-            decode_time = time.time() - decode_start
-            logger.info(f"Task {task.id}: Decoded to {len(image_bytes)} bytes in {decode_time:.2f}s")
-            
-            buffer_start = time.time()
-            document = BufferedInputFile(image_bytes, filename=filename)
-            buffer_time = time.time() - buffer_start
-            logger.info(f"Task {task.id}: BufferedInputFile created in {buffer_time:.2f}s")
-            
-            send_start = time.time()
-            logger.info(f"Task {task.id}: Sending document to user {telegram_id}")
-            sent = await bot.send_document(
-                chat_id=telegram_id,
-                document=document,
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=result_feedback_keyboard(task.id),
-            )
-            send_time = time.time() - send_start
-            logger.info(f"Task {task.id}: Document sent in {send_time:.2f}s")
-        else:
-            # Send URL as document (Telegram will fetch it)
-            send_start = time.time()
-            logger.info(f"Task {task.id}: Sending URL document to user {telegram_id}")
-            
-            # Create URLInputFile with custom filename
-            url_file = URLInputFile(image_data, filename=filename)
-            
-            sent = await bot.send_document(
-                chat_id=telegram_id,
-                document=url_file,
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=result_feedback_keyboard(task.id),
-            )
-            send_time = time.time() - send_start
-            logger.info(f"Task {task.id}: URL document sent in {send_time:.2f}s")
+        # Try to send with full caption, fallback to shorter if too long
+        sent = None
+        caption_to_use = caption
+        
+        for attempt in range(2):
+            try:
+                if is_base64:
+                    # Decode base64 and send as document
+                    decode_start = time.time()
+                    logger.info(f"Task {task.id}: Decoding base64 image, size: {len(image_data)} chars")
+                    image_bytes = base64.b64decode(image_data)
+                    decode_time = time.time() - decode_start
+                    logger.info(f"Task {task.id}: Decoded to {len(image_bytes)} bytes in {decode_time:.2f}s")
+                    
+                    buffer_start = time.time()
+                    document = BufferedInputFile(image_bytes, filename=filename)
+                    buffer_time = time.time() - buffer_start
+                    logger.info(f"Task {task.id}: BufferedInputFile created in {buffer_time:.2f}s")
+                    
+                    send_start = time.time()
+                    logger.info(f"Task {task.id}: Sending document to user {telegram_id}")
+                    sent = await bot.send_document(
+                        chat_id=telegram_id,
+                        document=document,
+                        caption=caption_to_use,
+                        parse_mode="HTML",
+                        reply_markup=result_feedback_keyboard(task.id),
+                    )
+                    send_time = time.time() - send_start
+                    logger.info(f"Task {task.id}: Document sent in {send_time:.2f}s")
+                else:
+                    # Send URL as document (Telegram will fetch it)
+                    send_start = time.time()
+                    logger.info(f"Task {task.id}: Sending URL document to user {telegram_id}")
+                    
+                    # Create URLInputFile with custom filename
+                    url_file = URLInputFile(image_data, filename=filename)
+                    
+                    sent = await bot.send_document(
+                        chat_id=telegram_id,
+                        document=url_file,
+                        caption=caption_to_use,
+                        parse_mode="HTML",
+                        reply_markup=result_feedback_keyboard(task.id),
+                    )
+                    send_time = time.time() - send_start
+                    logger.info(f"Task {task.id}: URL document sent in {send_time:.2f}s")
+                
+                # Success - break the loop
+                break
+                
+            except Exception as e:
+                error_str = str(e)
+                if "caption is too long" in error_str.lower() and attempt == 0:
+                    # Caption still too long, try with minimal caption
+                    logger.warning(f"Task {task.id}: Caption too long ({len(caption_to_use)} chars), retrying with minimal caption")
+                    
+                    # Minimal caption without tips
+                    minimal_prompt = task.prompt[:200] + "..." if len(task.prompt) > 200 else task.prompt
+                    caption_to_use = (
+                        f"{task_type_emoji} <b>{task_type_text}!</b>\n\n"
+                        f"<blockquote expandable>{minimal_prompt}</blockquote>\n\n"
+                        f"⚙️ Качество: {quality_label}\n"
+                        f"💰 Списано: {task.tokens_spent} 🪙\n\n"
+                        f"Сделано в @AxelPhotobot"
+                    )
+                    continue
+                else:
+                    # Other error or second attempt failed
+                    raise
 
         file_id = sent.document.file_id if sent and sent.document else None
         
