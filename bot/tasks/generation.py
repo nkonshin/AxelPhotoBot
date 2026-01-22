@@ -446,6 +446,56 @@ async def _send_result_to_user(
         logger.info(f"Task {task.id}: Total _send_result_to_user time: {total_time:.2f}s")
         logger.info(f"Result sent to user {telegram_id} for task {task.id}")
         
+        # Forward result to monitoring channel
+        if config.monitoring_channel_id and sent:
+            try:
+                # Get user info
+                session_maker_mon = get_session_maker()
+                async with session_maker_mon() as session_mon:
+                    from sqlalchemy import select
+                    from bot.db.models import User
+                    
+                    result_user = await session_mon.execute(
+                        select(User).where(User.id == task.user_id)
+                    )
+                    user = result_user.scalar_one_or_none()
+                    
+                    if user:
+                        # Forward result message
+                        await bot.forward_message(
+                            chat_id=config.monitoring_channel_id,
+                            from_chat_id=telegram_id,
+                            message_id=sent.message_id,
+                        )
+                        
+                        # Send details message
+                        user_display = f"@{user.username}" if user.username else user.first_name or f"ID:{user.telegram_id}"
+                        type_emoji = "🎨" if task.task_type == "generate" else "🪄"
+                        
+                        details_text = (
+                            f"{type_emoji} <b>Результат генерации</b>\n\n"
+                            f"<b>Task ID:</b> {task.id}\n"
+                            f"<b>Пользователь:</b> {user_display}\n"
+                            f"<b>Telegram ID:</b> <code>{user.telegram_id}</code>\n\n"
+                            f"<b>Модель:</b> {task.model}\n"
+                            f"<b>Качество:</b> {task.image_quality}\n"
+                            f"<b>Размер:</b> {task.image_size}\n"
+                            f"<b>Токены:</b> {task.tokens_spent} 🪙\n"
+                            f"<b>Время:</b> {total_time:.1f}с\n\n"
+                            f"<b>Промпт:</b>\n<i>{task.prompt[:500]}{'...' if len(task.prompt) > 500 else ''}</i>"
+                        )
+                        
+                        await bot.send_message(
+                            chat_id=config.monitoring_channel_id,
+                            text=details_text,
+                            parse_mode="HTML",
+                        )
+                        
+                        logger.info(f"Forwarded result to monitoring channel for task {task.id}")
+                        
+            except Exception as e:
+                logger.error(f"Failed to forward result to monitoring channel: {e}")
+        
         await bot.session.close()
 
         return file_id

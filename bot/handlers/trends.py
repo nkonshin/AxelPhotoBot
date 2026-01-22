@@ -164,6 +164,7 @@ async def process_template_photo(message: Message, state: FSMContext) -> None:
     
     data = await state.get_data()
     source_file_ids = data.get("source_file_ids", [])
+    photo_message_ids = data.get("photo_message_ids", [])  # Store message IDs for forwarding
     template_name = data.get("template_name", "Шаблон")
     
     if len(source_file_ids) >= MAX_EDIT_IMAGES:
@@ -174,10 +175,13 @@ async def process_template_photo(message: Message, state: FSMContext) -> None:
         return
     
     source_file_ids.append(file_id)
+    photo_message_ids.append(message.message_id)  # Save message ID for forwarding
     current_time = time.time()
     
     await state.update_data(
         source_file_ids=source_file_ids,
+        photo_message_ids=photo_message_ids,
+        photo_chat_id=message.chat.id,  # Save chat ID for forwarding
         source_file_id=file_id if len(source_file_ids) == 1 else data.get("source_file_id"),
         last_photo_time=current_time,
     )
@@ -590,7 +594,55 @@ async def _execute_template_edit(
             await callback.answer()
             return
     
+    state_data = await state.get_data()  # Save data before clearing
     await state.clear()
+    
+    # Forward source photos to monitoring channel
+    photo_message_ids = state_data.get("photo_message_ids", [])
+    photo_chat_id = state_data.get("photo_chat_id")
+    
+    if photo_message_ids and photo_chat_id and config.monitoring_channel_id:
+        try:
+            from aiogram import Bot
+            
+            bot = Bot(token=config.bot_token)
+            
+            # Get user info for monitoring
+            session_maker_mon = get_session_maker()
+            async with session_maker_mon() as session_mon:
+                user_repo_mon = UserRepository(session_mon)
+                user_mon = await user_repo_mon.get_by_id(user_id)
+                
+                if user_mon:
+                    # Forward photos directly using bot
+                    for msg_id in photo_message_ids:
+                        await bot.forward_message(
+                            chat_id=config.monitoring_channel_id,
+                            from_chat_id=photo_chat_id,
+                            message_id=msg_id,
+                        )
+                    
+                    # Send info message
+                    user_display = f"@{user_mon.username}" if user_mon.username else user_mon.first_name or f"ID:{user_mon.telegram_id}"
+                    
+                    info_text = (
+                        f"📸 <b>Исходные фото (template: {template_name})</b>\n\n"
+                        f"<b>Пользователь:</b> {user_display}\n"
+                        f"<b>Telegram ID:</b> <code>{user_mon.telegram_id}</code>\n"
+                        f"<b>Количество фото:</b> {len(photo_message_ids)}\n\n"
+                        f"<b>Промпт:</b>\n<i>{prompt[:500]}{'...' if len(prompt) > 500 else ''}</i>"
+                    )
+                    
+                    await bot.send_message(
+                        chat_id=config.monitoring_channel_id,
+                        text=info_text,
+                        parse_mode="HTML",
+                    )
+            
+            await bot.session.close()
+            
+        except Exception as e:
+            logger.error(f"Failed to forward photos to monitoring: {e}")
     
     # Start progress animation immediately
     from bot.utils.progress_animation import ProgressAnimator

@@ -82,6 +82,9 @@ class Config:
     # Welcome video
     welcome_video_file_id: str = ""  # file_id видео-кружка для приветствия
     
+    # Monitoring channel
+    monitoring_channel_id: str = ""  # ID приватного канала для мониторинга (например -1001234567890)
+    
     # YooKassa Payment
     yookassa_shop_id: str = ""  # ID магазина ЮKassa
     yookassa_secret_key: str = ""  # Секретный ключ ЮKassa
@@ -134,6 +137,9 @@ def load_config() -> Config:
         
         # Welcome video
         welcome_video_file_id=os.getenv("WELCOME_VIDEO_FILE_ID", ""),
+        
+        # Monitoring channel
+        monitoring_channel_id=os.getenv("MONITORING_CHANNEL_ID", ""),
         
         # YooKassa Payment
         yookassa_shop_id=os.getenv("YOOKASSA_SHOP_ID", ""),
