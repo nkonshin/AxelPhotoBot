@@ -498,7 +498,8 @@ class StatsRepository:
             period: Filter period - "all", "today", "week"
         
         Returns:
-            List of tuples: (task_id, username, model, quality, type, status, created_at, prompt, error_message)
+            List of tuples: (task_id, username, first_name, telegram_id, model, quality, type, status, 
+                           created_at, prompt, error_message, images_count, tokens_spent, user_balance)
         """
         from datetime import timedelta
         
@@ -514,6 +515,9 @@ class StatsRepository:
             GenerationTask.created_at,
             GenerationTask.prompt,
             GenerationTask.error_message,
+            GenerationTask.images_count,
+            GenerationTask.tokens_spent,
+            User.tokens,  # Current user balance
         ).join(User, GenerationTask.user_id == User.id)
         
         # Apply period filter

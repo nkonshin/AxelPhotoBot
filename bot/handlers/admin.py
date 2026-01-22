@@ -716,7 +716,9 @@ async def _send_generations(callback_or_message, filter_val: str = "last20") -> 
         lines = [f"{title}\n"]
         
         for gen in generations:
-            task_id, username, first_name, telegram_id, model, quality, task_type, status, created_at, prompt, error = gen
+            # Unpack all fields: task_id, username, first_name, telegram_id, model, quality, task_type, 
+            # status, created_at, prompt, error, images_count, tokens_spent, user_balance
+            task_id, username, first_name, telegram_id, model, quality, task_type, status, created_at, prompt, error, images_count, tokens_spent, user_balance = gen
             
             # Status emoji
             status_emoji = "✅" if status == "completed" else "❌" if status == "failed" else "⏳"
@@ -746,7 +748,7 @@ async def _send_generations(callback_or_message, filter_val: str = "last20") -> 
         
         text = "\n\n".join(lines)
         
-        # Add summary
+        # Add summary - status is at index 7
         total = len(generations)
         completed = sum(1 for g in generations if g[7] == "completed")
         failed = sum(1 for g in generations if g[7] == "failed")
@@ -922,12 +924,12 @@ async def admin_live_callback(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "admin:export")
 async def admin_export_callback(callback: CallbackQuery) -> None:
-    """Handle export request - export recent generations to CSV."""
+    """Handle export request - export recent generations to Excel with formatting."""
     if not config.is_admin(callback.from_user.id):
         await callback.answer("❌ Нет доступа")
         return
     
-    await callback.answer("📥 Генерирую CSV файл...")
+    await callback.answer("📥 Генерирую Excel файл...")
     
     session_maker = get_session_maker()
     
@@ -939,65 +941,166 @@ async def admin_export_callback(callback: CallbackQuery) -> None:
         await callback.message.answer("❌ Нет данных для экспорта")
         return
     
-    # Create CSV content
-    import csv
-    import io
-    
-    output = io.StringIO()
-    writer = csv.writer(output)
-    
-    # Header
-    writer.writerow([
-        "ID",
-        "Username",
-        "First Name",
-        "Telegram ID",
-        "Model",
-        "Quality",
-        "Type",
-        "Status",
-        "Created At",
-        "Prompt",
-        "Error"
-    ])
-    
-    # Data rows
-    for gen in generations:
-        task_id, username, first_name, telegram_id, model, quality, task_type, status, created_at, prompt, error = gen
+    # Create Excel file with openpyxl
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        import io
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Generations"
+        
+        # Header row with bold font
+        headers = [
+            "ID", "Username", "First Name", "Telegram ID", "Model", "Quality", 
+            "Type", "Status", "Photos", "Tokens", "Balance", "Created At", "Prompt", "Error"
+        ]
+        ws.append(headers)
+        
+        # Style header
+        header_font = Font(bold=True)
+        for cell in ws[1]:
+            cell.font = header_font
+        
+        # Data rows
+        for gen in generations:
+            task_id, username, first_name, telegram_id, model, quality, task_type, status, created_at, prompt, error, images_count, tokens_spent, user_balance = gen
+            
+            # Photos count - only show for edit tasks
+            photos_display = images_count if task_type == "edit" else ""
+            
+            row = [
+                task_id,
+                username or "",
+                first_name or "",
+                telegram_id,
+                model,
+                quality,
+                task_type,
+                status,
+                photos_display,
+                tokens_spent,
+                user_balance,
+                created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                prompt,
+                error or ""
+            ]
+            ws.append(row)
+            
+            # Apply red background to failed status cells
+            if status == "failed":
+                row_num = ws.max_row
+                status_cell = ws.cell(row=row_num, column=8)  # Status column
+                status_cell.fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+                status_cell.font = Font(color="CC0000", bold=True)
+        
+        # Adjust column widths
+        column_widths = {
+            'A': 8,   # ID
+            'B': 15,  # Username
+            'C': 15,  # First Name
+            'D': 12,  # Telegram ID
+            'E': 15,  # Model
+            'F': 10,  # Quality
+            'G': 10,  # Type
+            'H': 12,  # Status
+            'I': 8,   # Photos
+            'J': 10,  # Tokens
+            'K': 10,  # Balance
+            'L': 18,  # Created At
+            'M': 50,  # Prompt
+            'N': 30,  # Error
+        }
+        
+        for col, width in column_widths.items():
+            ws.column_dimensions[col].width = width
+        
+        # Save to bytes
+        excel_buffer = io.BytesIO()
+        wb.save(excel_buffer)
+        excel_buffer.seek(0)
+        
+        # Send as document
+        from aiogram.types import BufferedInputFile
+        from datetime import datetime
+        
+        filename = f"generations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        document = BufferedInputFile(
+            excel_buffer.read(),
+            filename=filename
+        )
+        
+        await callback.message.answer_document(
+            document=document,
+            caption=(
+                f"📊 Экспорт последних {len(generations)} генераций\n\n"
+                f"<b>Новые столбцы:</b>\n"
+                f"• Photos - количество фото (только для edit)\n"
+                f"• Balance - текущий баланс пользователя\n"
+                f"• Status 'failed' выделен красным"
+            )
+        )
+        
+        await callback.answer("✅ Файл отправлен")
+        
+    except ImportError:
+        # Fallback to CSV if openpyxl not available
+        logger.warning("openpyxl not installed, falling back to CSV export")
+        
+        import csv
+        import io
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
         writer.writerow([
-            task_id,
-            username or "",
-            first_name or "",
-            telegram_id,
-            model,
-            quality,
-            task_type,
-            status,
-            created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            prompt,
-            error or ""
+            "ID", "Username", "First Name", "Telegram ID", "Model", "Quality", 
+            "Type", "Status", "Photos", "Tokens", "Balance", "Created At", "Prompt", "Error"
         ])
-    
-    # Get CSV content
-    csv_content = output.getvalue()
-    output.close()
-    
-    # Send as document
-    from aiogram.types import BufferedInputFile
-    from datetime import datetime
-    
-    filename = f"generations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    document = BufferedInputFile(
-        csv_content.encode('utf-8-sig'),  # UTF-8 with BOM for Excel compatibility
-        filename=filename
-    )
-    
-    await callback.message.answer_document(
-        document=document,
-        caption=f"📊 Экспорт последних {len(generations)} генераций"
-    )
-    
-    await callback.answer("✅ Файл отправлен")
+        
+        # Data rows
+        for gen in generations:
+            task_id, username, first_name, telegram_id, model, quality, task_type, status, created_at, prompt, error, images_count, tokens_spent, user_balance = gen
+            
+            photos_display = images_count if task_type == "edit" else ""
+            
+            writer.writerow([
+                task_id,
+                username or "",
+                first_name or "",
+                telegram_id,
+                model,
+                quality,
+                task_type,
+                status,
+                photos_display,
+                tokens_spent,
+                user_balance,
+                created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                prompt,
+                error or ""
+            ])
+        
+        csv_content = output.getvalue()
+        output.close()
+        
+        from aiogram.types import BufferedInputFile
+        from datetime import datetime
+        
+        filename = f"generations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        document = BufferedInputFile(
+            csv_content.encode('utf-8-sig'),
+            filename=filename
+        )
+        
+        await callback.message.answer_document(
+            document=document,
+            caption=f"📊 Экспорт последних {len(generations)} генераций (CSV)"
+        )
+        
+        await callback.answer("✅ Файл отправлен")
 
 
 @router.callback_query(F.data == "admin:togglesub")
