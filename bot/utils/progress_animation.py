@@ -120,6 +120,8 @@ class ProgressAnimator:
     
     async def _send_initial_message(self) -> None:
         """Send initial progress message."""
+        bot = None
+        redis_client = None
         try:
             from aiogram import Bot
             import redis.asyncio as redis
@@ -140,12 +142,15 @@ class ProgressAnimator:
             redis_client = redis.from_url("redis://redis:6379/0")
             message_id_key = f"progress_animation:{self.telegram_id}"
             await redis_client.set(message_id_key, str(self.message_id), ex=600)  # Expire in 10 minutes
-            await redis_client.close()
-            
-            await bot.session.close()
             
         except Exception as e:
             logger.error(f"Failed to send initial progress message: {e}")
+        finally:
+            # Always close connections
+            if bot:
+                await bot.session.close()
+            if redis_client:
+                await redis_client.close()
     
     async def _animation_loop(self) -> None:
         """Main animation loop that updates progress periodically."""
@@ -192,8 +197,10 @@ class ProgressAnimator:
         if not self.message_id:
             return
         
+        bot = None
         try:
             from aiogram import Bot
+            from aiogram.exceptions import TelegramBadRequest
             
             bot = Bot(token=self.bot_token)
             
@@ -219,10 +226,19 @@ class ProgressAnimator:
                 parse_mode="HTML",
             )
             
-            await bot.session.close()
-            
+        except TelegramBadRequest as e:
+            # Message was deleted - stop animation
+            if "message to edit not found" in str(e).lower():
+                logger.info(f"Progress message {self.message_id} was deleted, stopping animation")
+                self.is_running = False
+            else:
+                logger.error(f"Telegram error updating progress: {e}")
         except Exception as e:
             logger.error(f"Failed to update progress message: {e}")
+        finally:
+            # Always close bot session
+            if bot:
+                await bot.session.close()
     
     def _build_progress_text(self) -> str:
         """Build progress message text."""
@@ -257,27 +273,38 @@ class ProgressAnimator:
         if not self.message_id:
             return
         
+        bot = None
+        redis_client = None
         try:
             from aiogram import Bot
+            from aiogram.exceptions import TelegramBadRequest
             import redis.asyncio as redis
             
             bot = Bot(token=self.bot_token)
             
-            await bot.delete_message(
-                chat_id=self.telegram_id,
-                message_id=self.message_id,
-            )
-            
-            await bot.session.close()
+            try:
+                await bot.delete_message(
+                    chat_id=self.telegram_id,
+                    message_id=self.message_id,
+                )
+            except TelegramBadRequest as e:
+                # Message already deleted - that's ok
+                if "message to delete not found" not in str(e).lower():
+                    logger.error(f"Failed to delete progress message: {e}")
             
             # Clean up Redis key
             redis_client = redis.from_url("redis://redis:6379/0")
             message_id_key = f"progress_animation:{self.telegram_id}"
             await redis_client.delete(message_id_key)
-            await redis_client.close()
             
         except Exception as e:
             logger.error(f"Failed to delete progress message: {e}")
+        finally:
+            # Always close connections
+            if bot:
+                await bot.session.close()
+            if redis_client:
+                await redis_client.close()
 
 
 async def stop_progress_animation(telegram_id: int, bot_token: str) -> None:
@@ -315,9 +342,12 @@ async def delete_progress_animation_for_user(telegram_id: int, bot_token: str) -
         telegram_id: User's Telegram ID
         bot_token: Bot token
     """
+    bot = None
+    redis_client = None
     try:
         import redis.asyncio as redis
         from aiogram import Bot
+        from aiogram.exceptions import TelegramBadRequest
         
         # Get message_id from Redis
         redis_client = redis.from_url("redis://redis:6379/0")
@@ -337,16 +367,22 @@ async def delete_progress_animation_for_user(telegram_id: int, bot_token: str) -
             try:
                 await bot.delete_message(chat_id=telegram_id, message_id=message_id)
                 logger.info(f"Deleted progress animation message {message_id} for user {telegram_id}")
+            except TelegramBadRequest as e:
+                # Message already deleted - that's ok
+                if "message to delete not found" not in str(e).lower():
+                    logger.debug(f"Could not delete progress message {message_id}: {e}")
             except Exception as e:
                 logger.debug(f"Could not delete progress message {message_id}: {e}")
-            finally:
-                await bot.session.close()
             
             # Clean up Redis keys
             await redis_client.delete(message_id_key)
             await redis_client.delete(stop_flag_key)
         
-        await redis_client.close()
-        
     except Exception as e:
         logger.warning(f"Failed to delete progress animation for user {telegram_id}: {e}")
+    finally:
+        # Always close connections
+        if bot:
+            await bot.session.close()
+        if redis_client:
+            await redis_client.close()

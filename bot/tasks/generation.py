@@ -382,7 +382,7 @@ async def _send_result_to_user(
         caption = (
             f"{task_type_emoji} <b>{task_type_text}!</b>\n\n"
             f"<blockquote expandable>{prompt_text}</blockquote>\n\n"
-            f"⚙️ {quality_label} • \n"
+            f"⚙️ Качество: {quality_label} \n"
             f"💰 Списано: {task.tokens_spent} 🪙\n\n"
             f"💡 <i>Ответьте на это сообщение с новым описанием, чтобы отредактировать картинку</i>\n\n"
             f"❓ <b>Не понравился результат?</b>\n"
