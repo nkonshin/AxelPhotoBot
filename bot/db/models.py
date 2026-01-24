@@ -75,7 +75,7 @@ class GenerationTask(Base):
     image_size: Mapped[str] = mapped_column(
         String(20), default="1024x1024", nullable=False
     )
-    prompt: Mapped[str] = mapped_column(String(2000), nullable=False)
+    prompt: Mapped[str] = mapped_column(String(3500), nullable=False)
     source_image_url: Mapped[Optional[str]] = mapped_column(
         String(2000), nullable=True
     )
