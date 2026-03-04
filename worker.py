@@ -11,6 +11,7 @@ Or with custom queue:
 import argparse
 import logging
 import sys
+from urllib.parse import urlparse, urlunparse
 
 from redis import Redis
 from rq import Worker, Queue
@@ -44,7 +45,16 @@ def main():
     
     # Connect to Redis
     redis_conn = Redis.from_url(config.redis_url)
-    logger.info(f"Connected to Redis at {config.redis_url}")
+    # Mask password in URL for logging
+    parsed_url = urlparse(config.redis_url)
+    if parsed_url.password:
+        masked_url = urlunparse(parsed_url._replace(
+            netloc=f"{parsed_url.username or ''}:***@{parsed_url.hostname}"
+            + (f":{parsed_url.port}" if parsed_url.port else "")
+        ))
+    else:
+        masked_url = config.redis_url
+    logger.info(f"Connected to Redis at {masked_url}")
     
     # Create queue
     queue = Queue(name=args.queue, connection=redis_conn)

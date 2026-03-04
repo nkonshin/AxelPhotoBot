@@ -84,7 +84,7 @@ def process_generation_task(task_id: int) -> bool:
         Exception: Re-raised for RQ retry mechanism
     """
     # Run async code in sync context (RQ workers are sync)
-    return asyncio.get_event_loop().run_until_complete(
+    return asyncio.run(
         _process_generation_task_async(task_id)
     )
 

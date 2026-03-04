@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -12,8 +12,11 @@ from bot.db.database import Base
 
 class User(Base):
     """User model representing a Telegram user."""
-    
+
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("tokens >= 0", name="ck_users_tokens_non_negative"),
+    )
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     telegram_id: Mapped[int] = mapped_column(

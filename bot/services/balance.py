@@ -1,11 +1,14 @@
 """Balance service for token operations."""
 
+import logging
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import User, GenerationTask
+
+logger = logging.getLogger(__name__)
 
 
 class InsufficientBalanceError(Exception):
@@ -66,24 +69,33 @@ class BalanceService:
         Raises:
             InsufficientBalanceError: If user doesn't have enough tokens
         """
-        result = await self.session.execute(
+        # Atomic update: deduct only if balance is sufficient
+        stmt = (
+            update(User)
+            .where(User.id == user_id)
+            .where(User.tokens >= amount)
+            .values(tokens=User.tokens - amount)
+        )
+        result = await self.session.execute(stmt)
+
+        if result.rowcount == 0:
+            # Either user not found or insufficient balance
+            user_result = await self.session.execute(
+                select(User).where(User.id == user_id)
+            )
+            existing = user_result.scalar_one_or_none()
+            if existing is None:
+                return None
+            if raise_on_insufficient:
+                raise InsufficientBalanceError(required=amount, available=existing.tokens)
+            return None
+
+        await self.session.commit()
+        # Refresh to get updated state
+        user_result = await self.session.execute(
             select(User).where(User.id == user_id)
         )
-        user = result.scalar_one_or_none()
-        
-        if user is None:
-            return None
-        
-        if user.tokens < amount:
-            if raise_on_insufficient:
-                raise InsufficientBalanceError(required=amount, available=user.tokens)
-            return None
-        
-        user.tokens -= amount
-        await self.session.commit()
-        await self.session.refresh(user)
-        
-        return user
+        return user_result.scalar_one_or_none()
     
     async def refund_tokens(self, user_id: int, amount: int) -> Optional[User]:
         """
