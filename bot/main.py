@@ -8,6 +8,7 @@ This module provides:
 
 import asyncio
 import logging
+import secrets
 from contextlib import asynccontextmanager
 
 from aiogram.types import Update
@@ -200,7 +201,9 @@ def verify_admin_api_key(request: Request) -> bool:
     if not config.admin_api_key:
         return False
     api_key = request.headers.get("X-Admin-API-Key")
-    return api_key == config.admin_api_key
+    if not api_key:
+        return False
+    return secrets.compare_digest(api_key, config.admin_api_key)
 
 
 @app.get("/admin/stats")
@@ -374,14 +377,19 @@ async def yookassa_webhook(request: Request):
             payment_repo = PaymentRepository(session)
             user_repo = UserRepository(session)
             
-            # Find payment in database
-            payment = await payment_repo.get_by_yookassa_id(payment_id)
-            
+            # Find payment in database (lock row to prevent concurrent processing)
+            payment = await payment_repo.get_by_yookassa_id(payment_id, for_update=True)
+
             if not payment:
                 logger.warning(f"Payment {payment_id} not found in database")
                 return Response(status_code=200)
-            
+
             old_status = payment.status
+
+            # Early exit if already processed (concurrent webhook protection)
+            if old_status == status:
+                logger.info(f"Payment {payment_id} already in status '{status}', skipping")
+                return Response(status_code=200)
             
             # Update payment status
             payment.status = status
@@ -631,6 +639,16 @@ async def yookassa_webhook(request: Request):
         return Response(status_code=200)
         
     except Exception as e:
-        logger.exception(f"Error processing YooKassa webhook: {e}")
+        payment_id_log = (
+            data.get("object", {}).get("id", "unknown")
+            if "data" in dir() and data
+            else "unknown"
+        )
+        logger.exception(
+            "PAYMENT_WEBHOOK_ERROR payment_id=%s error_type=%s: %s",
+            payment_id_log,
+            type(e).__name__,
+            e,
+        )
         # Return 200 to prevent YooKassa from retrying
         return Response(status_code=200)

@@ -1,9 +1,12 @@
 """Application configuration loaded from environment variables."""
 
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import List
 from dotenv import load_dotenv
+
+_logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -26,6 +29,7 @@ def _parse_int_list(value: str) -> List[int]:
     try:
         return [int(x.strip()) for x in value.split(",") if x.strip()]
     except ValueError:
+        _logger.warning("Failed to parse integer list from value: %r", value)
         return []
 
 
@@ -148,5 +152,22 @@ def load_config() -> Config:
     )
 
 
+def _validate_config(cfg: Config) -> None:
+    """Validate that required configuration variables are set."""
+    required = {
+        "bot_token": cfg.bot_token,
+        "database_url": cfg.database_url,
+        "openai_api_key": cfg.openai_api_key,
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        env_names = ", ".join(name.upper() for name in missing)
+        raise ValueError(
+            f"Missing required configuration: {env_names}. "
+            f"Set the corresponding environment variables."
+        )
+
+
 # Global config instance
 config = load_config()
+_validate_config(config)

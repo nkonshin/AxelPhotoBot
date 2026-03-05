@@ -1,10 +1,13 @@
 """Repository classes for database CRUD operations."""
 
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
+
+_logger = logging.getLogger(__name__)
 
 from bot.config import config
 from bot.db.models import User, GenerationTask
@@ -122,13 +125,20 @@ class UserRepository:
         
         if user is None:
             return None
-        
+
+        if tokens_delta < 0 and user.tokens + tokens_delta < 0:
+            _logger.warning(
+                "Refusing to set negative balance for user %s (current=%s, delta=%s)",
+                user_id, user.tokens, tokens_delta,
+            )
+            return None
+
         user.tokens += tokens_delta
         await self.session.commit()
         await self.session.refresh(user)
-        
+
         return user
-    
+
     async def update_model(self, user_id: int, model: str) -> Optional[User]:
         """
         Update user's selected model.
@@ -336,7 +346,7 @@ class TaskRepository:
         Returns:
             Number of tasks created in the time period
         """
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
         result = await self.session.execute(
             select(func.count(GenerationTask.id))
             .where(GenerationTask.user_id == user_id)
@@ -384,7 +394,7 @@ class StatsRepository:
     
     async def get_tasks_today(self) -> int:
         """Get number of tasks created today."""
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         result = await self.session.execute(
             select(func.count(GenerationTask.id))
             .where(GenerationTask.created_at >= today)
@@ -393,7 +403,7 @@ class StatsRepository:
     
     async def get_users_today(self) -> int:
         """Get number of users registered today."""
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         result = await self.session.execute(
             select(func.count(User.id))
             .where(User.created_at >= today)
@@ -402,7 +412,7 @@ class StatsRepository:
     
     async def get_active_users_today(self) -> int:
         """Get number of users who created tasks today."""
-        today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         result = await self.session.execute(
             select(func.count(func.distinct(GenerationTask.user_id)))
             .where(GenerationTask.created_at >= today)
@@ -522,10 +532,10 @@ class StatsRepository:
         
         # Apply period filter
         if period == "today":
-            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             query = query.where(GenerationTask.created_at >= today)
         elif period == "week":
-            week_ago = datetime.utcnow() - timedelta(days=7)
+            week_ago = datetime.now(timezone.utc) - timedelta(days=7)
             query = query.where(GenerationTask.created_at >= week_ago)
         
         query = query.order_by(desc(GenerationTask.created_at)).limit(limit)
@@ -546,9 +556,9 @@ class StatsRepository:
         from datetime import timedelta
         
         if period == "24h":
-            time_ago = datetime.utcnow() - timedelta(hours=24)
+            time_ago = datetime.now(timezone.utc) - timedelta(hours=24)
         else:  # week
-            time_ago = datetime.utcnow() - timedelta(days=7)
+            time_ago = datetime.now(timezone.utc) - timedelta(days=7)
         
         # Total errors
         total_errors_result = await self.session.execute(
@@ -593,7 +603,7 @@ class StatsRepository:
         """
         from datetime import timedelta
         
-        time_ago = datetime.utcnow() - timedelta(days=days)
+        time_ago = datetime.now(timezone.utc) - timedelta(days=days)
         
         # Total tokens given (initial + referral bonuses)
         total_users_result = await self.session.execute(
@@ -649,7 +659,7 @@ class StatsRepository:
         from datetime import timedelta
         
         # Active users in last hour
-        hour_ago = datetime.utcnow() - timedelta(hours=1)
+        hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
         active_users_result = await self.session.execute(
             select(func.count(func.distinct(GenerationTask.user_id)))
             .where(GenerationTask.created_at >= hour_ago)
@@ -657,7 +667,7 @@ class StatsRepository:
         active_users = active_users_result.scalar() or 0
         
         # Tasks in queue (pending/processing) - only recent ones (last 10 minutes)
-        ten_minutes_ago = datetime.utcnow() - timedelta(minutes=10)
+        ten_minutes_ago = datetime.now(timezone.utc) - timedelta(minutes=10)
         queue_result = await self.session.execute(
             select(func.count(GenerationTask.id))
             .where(GenerationTask.status.in_(["pending", "processing"]))
@@ -731,13 +741,24 @@ class PaymentRepository:
         
         return payment
     
-    async def get_by_yookassa_id(self, yookassa_payment_id: str) -> Optional["Payment"]:
-        """Get payment by YooKassa payment ID."""
+    async def get_by_yookassa_id(
+        self, yookassa_payment_id: str, for_update: bool = False
+    ) -> Optional["Payment"]:
+        """Get payment by YooKassa payment ID.
+
+        Args:
+            yookassa_payment_id: YooKassa payment identifier
+            for_update: If True, lock the row with SELECT ... FOR UPDATE
+                to prevent concurrent webhook processing
+        """
         from bot.db.models import Payment
-        
-        result = await self.session.execute(
-            select(Payment).where(Payment.yookassa_payment_id == yookassa_payment_id)
+
+        query = select(Payment).where(
+            Payment.yookassa_payment_id == yookassa_payment_id
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.session.execute(query)
         return result.scalar_one_or_none()
     
     async def get_latest_pending(self, user_id: int) -> Optional["Payment"]:
@@ -862,7 +883,7 @@ class GiftRepository:
         if recipient_id:
             gift.recipient_id = recipient_id
         if status == "claimed":
-            gift.claimed_at = datetime.utcnow()
+            gift.claimed_at = datetime.now(timezone.utc)
         
         await self.session.commit()
         await self.session.refresh(gift)
